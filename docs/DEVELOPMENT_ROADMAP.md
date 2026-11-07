@@ -10,7 +10,7 @@
 ```
 [✓] PHASE 0: Project Audit, Architecture, Schema & Roadmapping
 [✓] PHASE 1: Premium Frontend & User Experience (Luxury UI, Concierge, Admin Dashboard)
-[ ] PHASE 2: Backend Core, Database Layer & Authentication
+[✓] PHASE 2: Backend Core, Database Layer & Authentication
 [ ] PHASE 3: Dual-Environment Knowledge Base Management (DEMO vs REAL)
 [ ] PHASE 4: Grounded AI Concierge & RAG Engine (Zero Hallucination)
 [ ] PHASE 5: Reservation Requests & Lead Management Workflow
@@ -37,26 +37,19 @@
 ### Phase 1: Premium Frontend & User Experience
 - [x] Initialize React 18+ with TypeScript and Vite.
 - [x] Configure Tailwind CSS luxury palette (Obsidian, Charcoal, Champagne Gold, Cream).
-- [x] Implement responsive luxury Customer Concierge Chatbot UI:
-  - Welcome screen with Amit Hospitality branding.
-  - Restaurant/outlet selector (Amber Terrace, Saffron & Silk, The Velvet Cellar).
-  - Suggested luxury prompt chips ("Show me the signature menu", "Timings & dress code", etc.).
-  - Conversational message feed with markdown rendering and citation chips.
-  - Interactive typing indicators and animated states.
-  - Prominent, elegant DEMO MODE indicator banner.
-  - Mobile bottom sheet / responsive drawer.
-  - Integrated quick Reservation Modal & Lead Inquiry drawer right from the chat suggestions.
-- [x] Implement Admin Dashboard layout:
-  - Collapsible navigation sidebar.
-  - Header with environment toggle indicator, quick search, and profile menu.
-  - Summary metric cards with trends (Conversations, Pending Bookings, Leads, Documents).
-  - Knowledge Base Management with DEMO vs REAL repository tabs, document uploader, and chunk inspector.
-  - Outlets & Menus editor with real-time price updates and dietary tag filters.
-  - Reservations table with status transitions and maître d' allocation notes.
-  - Events & Leads pipeline with stages (`CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `WON`, `LOST`).
-  - Analytics & Insights dashboard with frequent questions and knowledge gap alerts.
-  - Settings page with audit logs and AI model parameters.
+- [x] Implement responsive luxury Customer Concierge Chatbot UI.
+- [x] Implement Admin Dashboard layout with KPIs, Outlets, Knowledge, Reservations, Leads, Analytics, and Settings.
 - [x] Production build passes cleanly (`tsc && vite build` -> 0 errors).
+- [x] Running live on localhost (`http://localhost:5173/`).
+
+### Phase 2: Backend Core, Database Layer & Authentication
+- [x] Implement FastAPI async application with CORS and modular routers.
+- [x] Implement SQLAlchemy 2.0 ORM entities for all 19 relational tables with dual engine support (PostgreSQL + pgvector for cloud, SQLite for local dev).
+- [x] Implement JWT token encoding/decoding and bcrypt password hashing (without passlib 72-byte truncation bug).
+- [x] Enforce Role-Based Access Control (`SUPER_ADMIN`, `ADMIN`, `MANAGER`, `STAFF`) with protected API dependencies.
+- [x] Implement database seed script (`backend/app/utils/seed_data.py`) pre-loading default Super Admin and rich DEMO menus/outlets.
+- [x] Implement automated test suite (`backend/tests/test_direct.py`) — **10/10 tests passing**.
+- [x] Backend running live on localhost (`http://localhost:8000/docs`).
 
 ### Phase 2: Backend Core, Database Layer & Authentication
 - [ ] Initialize FastAPI application with modern async lifespan and CORS.
