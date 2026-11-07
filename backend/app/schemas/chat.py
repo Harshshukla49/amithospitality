@@ -11,11 +11,13 @@ class ChatMessageRequest(BaseModel):
 class CitationItem(BaseModel):
     document_title: str
     category: str
+    snippet: Optional[str] = None
 
 class ChatMessageResponse(BaseModel):
     reply: str
     environment: str
     is_demo: bool
+    detected_intent: Optional[str] = None
     citations: Optional[List[CitationItem]] = None
     suggested_actions: Optional[List[str]] = None
 

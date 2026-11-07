@@ -1,7 +1,21 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ChatMessage, Outlet } from '../types';
-import { INITIAL_OUTLETS, DEMO_MENU_ITEMS } from '../utils/mockData';
+import { INITIAL_OUTLETS } from '../utils/mockData';
 import { useEnvironment } from './EnvironmentContext';
+import { apiRequest } from '../api/client';
+
+interface BackendChatResponse {
+  reply: string;
+  environment: 'DEMO' | 'REAL';
+  is_demo: boolean;
+  detected_intent?: string;
+  citations?: Array<{
+    document_title: string;
+    category: string;
+    snippet?: string;
+  }>;
+  suggested_actions?: string[];
+}
 
 interface ChatContextType {
   messages: ChatMessage[];
@@ -26,11 +40,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [handoverRequested, setHandoverRequested] = useState<boolean>(false);
 
-  const initialGreeting: ChatMessage = {
-    id: 'msg_welcome',
+  // Persistent Session ID
+  const [sessionId] = useState<string>(() => {
+    let s = sessionStorage.getItem('amit_chat_session_id');
+    if (!s) {
+      s = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      sessionStorage.setItem('amit_chat_session_id', s);
+    }
+    return s;
+  });
+
+  const getGreeting = (outlet: Outlet): ChatMessage => ({
+    id: `msg_welcome_${outlet.id}`,
     sender: 'ASSISTANT',
     environment,
-    content: `Namaste and welcome to **Amit Hospitality**. I am your personal AI Concierge for **${selectedOutlet.name}**.\n\nHow may I curate your dining experience this evening? I can present our curated menus, detail private dining reservations, explain restaurant timings, or check dietary requirements.`,
+    content: `Namaste and welcome to **Amit Hospitality**. I am your personal AI Concierge for **${outlet.name}** (${outlet.outletType}).\n\nHow may I curate your dining experience this evening? I can present our curated menus, detail private dining reservations, explain restaurant timings, or check dietary requirements.`,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     suggestedActions: [
       'Show me the signature menu',
@@ -40,37 +64,72 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'I want to organize a private event',
       'Connect me with guest relations',
     ],
-  };
+  });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([initialGreeting]);
+  const [messages, setMessages] = useState<ChatMessage[]>([getGreeting(INITIAL_OUTLETS[0])]);
+
+  // Handle switching outlet: update welcome context
+  const handleOutletChange = (newOutlet: Outlet) => {
+    setSelectedOutlet(newOutlet);
+    const switchNotice: ChatMessage = {
+      id: `notice_${Date.now()}`,
+      sender: 'SYSTEM',
+      environment,
+      content: `Concierge context updated to **${newOutlet.name}** (${newOutlet.cuisineType}). How may I assist your experience here?`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      suggestedActions: [
+        'Show me the signature menu',
+        'What are your timings and dress code?',
+        'Book a table for tonight',
+      ],
+    };
+    setMessages((prev) => [...prev, switchNotice]);
+  };
 
   const clearChat = () => {
     setMessages([
       {
-        ...initialGreeting,
+        ...getGreeting(selectedOutlet),
         id: `msg_${Date.now()}`,
-        content: `Conversation refreshed. Welcome to **${selectedOutlet.name}**. How may I assist you?`,
+        content: `Conversation refreshed. Welcome to **${selectedOutlet.name}**. How may I assist you this evening?`,
       },
     ]);
     setHandoverRequested(false);
   };
 
-  const provideFeedback = (id: string, feedback: 'UP' | 'DOWN') => {
+  const provideFeedback = async (id: string, feedback: 'UP' | 'DOWN') => {
     setMessages((prev) =>
       prev.map((msg) => (msg.id === id ? { ...msg, feedback } : msg))
     );
+    try {
+      await apiRequest('/chat/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ message_id: id, rating: feedback }),
+      });
+    } catch (e) {
+      console.warn('Feedback recording skipped:', e);
+    }
   };
 
-  const requestHandover = () => {
+  const requestHandover = async () => {
     setHandoverRequested(true);
     const handoverNotice: ChatMessage = {
       id: `msg_${Date.now()}`,
       sender: 'SYSTEM',
       environment,
-      content: `A priority notification has been dispatched to the Guest Relations Desk at **${selectedOutlet.name}**. A concierge team member will connect with you shortly. You may also reach our concierge desk directly at +91 11 4050 9900.`,
+      content: `A priority notification has been dispatched to the Guest Relations Desk at **${selectedOutlet.name}**. A concierge team member will connect with you shortly. You may also reach our concierge desk directly at **+91 11 4050 9900** or **guestrelations@amithospitality.com**.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages((prev) => [...prev, handoverNotice]);
+
+    try {
+      await apiRequest('/chat/handover', {
+        method: 'POST',
+        body: JSON.stringify({ outlet_id: selectedOutlet.id }),
+      });
+    } catch (e) {
+      console.warn('Handover notification recorded locally.');
+    }
   };
 
   const sendMessage = async (userText: string) => {
@@ -87,85 +146,47 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
-    // Simulate luxury AI response processing
-    setTimeout(() => {
-      let replyContent = '';
-      let citations = undefined;
-      let suggestedActions = undefined;
-
-      const lower = userText.toLowerCase();
-
-      // STRICT GROUNDING EVALUATION:
-      if (!isDemo) {
-        // REAL MODE BEHAVIOR: Real knowledge base currently empty or requires verified docs
-        replyContent = `[REAL MODE - VERIFIED KNOWLEDGE REQUIRED]\n\nI do not currently have verified corporate documentation loaded for this inquiry at **${selectedOutlet.name}**.\n\nTo ensure complete accuracy, I only provide verified information. Please contact our Guest Relations Concierge directly at guestrelations@amithospitality.com or ask an administrator to upload verified documents in the Admin Portal.`;
-        suggestedActions = ['Connect me with guest relations', 'Switch to DEMO mode to test sample data'];
-      } else {
-        // DEMO MODE BEHAVIOR:
-        if (lower.includes('menu') || lower.includes('dishes') || lower.includes('food')) {
-          const outletItems = DEMO_MENU_ITEMS.filter((i) => i.outletId === selectedOutlet.id);
-          const itemList = outletItems
-            .map(
-              (item) =>
-                `• **${item.name}** (₹${item.price.toLocaleString('en-IN')}) — *${item.description}* [${item.dietaryFlags.join(', ')}]`
-            )
-            .join('\n');
-
-          replyContent = `Here is a curated selection from the menu at **${selectedOutlet.name}**:\n\n${itemList}\n\n*Note: All menu items and prices shown are sample DEMO data for illustrative purposes.*`;
-          citations = [{ documentTitle: `${selectedOutlet.name} Sample Menu Roster`, category: 'MENU' }];
-          suggestedActions = [
-            'What is the price of the Sea Bass?',
-            'Do you have vegetarian options?',
-            'I want to reserve a table',
-          ];
-        } else if (lower.includes('timing') || lower.includes('hours') || lower.includes('open') || lower.includes('dress code')) {
-          replyContent = `**Timings & Policies for ${selectedOutlet.name}**:\n\n• **Operating Hours:** ${selectedOutlet.openingTime} to ${selectedOutlet.closingTime} (Daily)\n• **Cuisine:** ${selectedOutlet.cuisineType}\n• **Dress Code:** ${selectedOutlet.dressCode}\n• **Valet Parking:** Complimentary valet parking is available at the main entrance porte-cochère.\n\n*All timings and policies are currently operating under DEMO mode.*`;
-          citations = [{ documentTitle: 'Amber Terrace Operating Policies (Sample)', category: 'POLICY' }];
-          suggestedActions = ['Book a table', 'Show me the cocktail menu'];
-        } else if (lower.includes('price') || lower.includes('cost') || lower.includes('truffle') || lower.includes('sea bass') || lower.includes('dal')) {
-          const matched = DEMO_MENU_ITEMS.find((i) =>
-            lower.includes(i.name.toLowerCase().split(' ')[0]) || lower.includes('truffle')
-          );
-          if (matched) {
-            replyContent = `The **${matched.name}** is priced at **₹${matched.price.toLocaleString('en-IN')}**.\n\n*Preparation:* ${matched.description}\n*Dietary:* ${matched.dietaryFlags.join(', ')}\n\n*Price is illustrative sample DEMO data.*`;
-          } else {
-            replyContent = `Our signature dishes range between ₹595 and ₹1,250. For example, our **Truffle Edamame Dumplings** are ₹695, and our **Glazed Chilean Sea Bass** is ₹1,250.\n\n*Sample DEMO pricing.*`;
-          }
-          suggestedActions = ['I want to book a table', 'View full menu'];
-        } else if (lower.includes('book') || lower.includes('reserve') || lower.includes('table')) {
-          replyContent = `I would be delighted to assist you with a table reservation at **${selectedOutlet.name}**.\n\nPlease select your preferred date, time, and guest count using the reservation drawer below, or let me know if you have a special occasion to celebrate!`;
-          suggestedActions = ['Open reservation form', 'Do you have outdoor seating?'];
-        } else if (lower.includes('private') || lower.includes('party') || lower.includes('event') || lower.includes('wedding')) {
-          replyContent = `At **${selectedOutlet.name}**, we host bespoke private celebrations, corporate executive dinners, and cocktail receptions with seating capacity up to ${selectedOutlet.seatingCapacity} guests.\n\nWould you like me to connect you with our Events & Banquets Director or capture your event details for a personalized proposal?`;
-          suggestedActions = ['Submit private dining enquiry', 'Contact Events Team'];
-        } else if (lower.includes('connect') || lower.includes('team') || lower.includes('human') || lower.includes('speak')) {
-          replyContent = `Certainly. I am initiating a priority request to our Guest Relations Concierge team. You can also contact us directly at +91 11 4050 9900 or reservations@amithospitality.com.`;
-          requestHandover();
-          setIsTyping(false);
-          return;
-        } else {
-          replyContent = `Thank you for your inquiry regarding **${selectedOutlet.name}**.\n\nAs your luxury AI Concierge, I can assist you with:\n1. Exploring our curated culinary & cocktail menus.\n2. Inquiring about dietary accommodations (Vegetarian, Jain, Vegan, Gluten-Free).\n3. Table reservations and dress code policies.\n4. Private dining, corporate gatherings, and celebrations.\n\nHow may I tailor your experience?`;
-          suggestedActions = [
-            'Show me the signature menu',
-            'What are your timings and dress code?',
-            'I want to book a table for tonight',
-          ];
-        }
-      }
+    try {
+      // Real API Call to RAG backend
+      const res = await apiRequest<BackendChatResponse>('/chat/messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: sessionId,
+          outlet_id: selectedOutlet.id,
+          message: userText,
+          language,
+        }),
+      });
 
       const assistantMsg: ChatMessage = {
         id: `assist_${Date.now()}`,
         sender: 'ASSISTANT',
-        environment,
-        content: replyContent,
+        environment: res.environment,
+        content: res.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        citations,
-        suggestedActions,
+        citations: res.citations?.map((c) => ({
+          documentTitle: c.document_title,
+          category: c.category,
+          snippet: c.snippet,
+        })),
+        suggestedActions: res.suggested_actions,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+    } catch (err: any) {
+      console.error('Chat API error:', err);
+      const errorMsg: ChatMessage = {
+        id: `assist_err_${Date.now()}`,
+        sender: 'ASSISTANT',
+        environment,
+        content: `I apologize for the brief pause. Our luxury concierge service is momentarily reconnecting. Please feel free to retry your inquiry, or connect with our Guest Relations Desk directly at **+91 11 4050 9900**.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedActions: ['Retry inquiry', 'Connect me with guest relations'],
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
-    }, 700);
+    }
   };
 
   return (
@@ -173,7 +194,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         messages,
         selectedOutlet,
-        setSelectedOutlet,
+        setSelectedOutlet: handleOutletChange,
         sendMessage,
         clearChat,
         isTyping,
