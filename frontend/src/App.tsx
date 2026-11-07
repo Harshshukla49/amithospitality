@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { EnvironmentProvider } from './context/EnvironmentContext';
+import React, { useState, useEffect } from 'react';
+import { EnvironmentProvider, useEnvironment } from './context/EnvironmentContext';
 import { AuthProvider } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 import { Header } from './components/common/Header';
@@ -20,8 +20,11 @@ import {
   INITIAL_DOCUMENTS,
 } from './utils/mockData';
 import { ReservationRequest, Lead, KnowledgeDocument, ReservationStatus, LeadStatus } from './types';
+import { fetchReservationsApi, updateReservationStatusApi } from './api/reservations';
+import { fetchLeadsApi, updateLeadStatusApi } from './api/leads';
 
 const MainLayout: React.FC = () => {
+  const { environment } = useEnvironment();
   const [currentView, setCurrentView] = useState<'CUSTOMER' | 'ADMIN'>('CUSTOMER');
   const [adminTab, setAdminTab] = useState<AdminTab>('DASHBOARD');
 
@@ -30,24 +33,54 @@ const MainLayout: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
   const [documents, setDocuments] = useState<KnowledgeDocument[]>(INITIAL_DOCUMENTS);
 
+  // Sync live reservations and leads from backend
+  useEffect(() => {
+    let isMounted = true;
+    fetchReservationsApi({ environment })
+      .then((data) => {
+        if (isMounted && data.length > 0) setReservations(data);
+      })
+      .catch((e) => console.warn('Backend reservations sync notice:', e));
+
+    fetchLeadsApi({ environment })
+      .then((data) => {
+        if (isMounted && data.length > 0) setLeads(data);
+      })
+      .catch((e) => console.warn('Backend leads sync notice:', e));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [environment]);
+
   const handleAddReservation = (res: ReservationRequest) => {
     setReservations((prev) => [res, ...prev]);
   };
 
-  const handleUpdateReservationStatus = (id: number, status: ReservationStatus, notes?: string) => {
+  const handleUpdateReservationStatus = async (id: number, status: ReservationStatus, notes?: string) => {
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status, internalNotes: notes || r.internalNotes } : r))
     );
+    try {
+      await updateReservationStatusApi(id, status, notes);
+    } catch (e) {
+      console.warn('Backend status update error:', e);
+    }
   };
 
   const handleAddLead = (lead: Lead) => {
     setLeads((prev) => [lead, ...prev]);
   };
 
-  const handleUpdateLeadStatus = (id: number, status: LeadStatus, notes?: string) => {
+  const handleUpdateLeadStatus = async (id: number, status: LeadStatus, notes?: string) => {
     setLeads((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status, notes: notes || l.notes } : l))
     );
+    try {
+      await updateLeadStatusApi(id, status, notes);
+    } catch (e) {
+      console.warn('Backend lead status update error:', e);
+    }
   };
 
   const handleAddDocument = (doc: KnowledgeDocument) => {

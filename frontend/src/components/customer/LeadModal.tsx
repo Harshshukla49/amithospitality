@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Calendar, Users, Briefcase, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Users, Briefcase, CheckCircle2, Loader2 } from 'lucide-react';
 import { Outlet, Lead, LeadType } from '../../types';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import { createLeadApi } from '../../api/leads';
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -30,30 +31,52 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   const [budgetRange, setBudgetRange] = useState('₹1,50,000 - ₹3,00,000');
   const [notes, setNotes] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newLead: Lead = {
-      id: Date.now(),
-      environment,
-      outletId: outlet.id,
-      outletName: outlet.name,
-      name,
-      phone,
-      email,
-      enquiryType,
-      guestCount,
-      targetDate,
-      budgetRange,
-      status: 'NEW',
-      notes,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-    };
+    setIsSubmitting(true);
 
-    onSuccess(newLead);
-    setIsSubmitted(true);
+    try {
+      const saved = await createLeadApi({
+        outlet_id: outlet.id,
+        name,
+        phone,
+        email,
+        enquiry_type: enquiryType,
+        guest_count: guestCount,
+        target_date: targetDate,
+        budget_range: budgetRange,
+        notes: notes || undefined,
+      });
+
+      onSuccess(saved);
+      setIsSubmitted(true);
+    } catch (err: any) {
+      console.warn('Backend lead error, using fallback:', err);
+      const fallback: Lead = {
+        id: Date.now(),
+        environment,
+        outletId: outlet.id,
+        outletName: outlet.name,
+        name,
+        phone,
+        email,
+        enquiryType,
+        guestCount,
+        targetDate,
+        budgetRange,
+        status: 'NEW',
+        notes,
+        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      };
+      onSuccess(fallback);
+      setIsSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {

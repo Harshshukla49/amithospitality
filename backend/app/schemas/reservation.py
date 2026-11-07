@@ -32,6 +32,7 @@ class ReservationResponse(BaseModel):
     special_requests: Optional[str] = None
     status: str
     internal_notes: Optional[str] = None
+    capacity_warning: Optional[str] = None
     created_at: datetime
 
     class Config:
