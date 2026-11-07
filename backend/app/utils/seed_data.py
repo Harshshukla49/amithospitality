@@ -8,6 +8,8 @@ from app.models.lead import Lead
 from app.models.audit import EnvironmentSetting, AuditLog
 from app.models.ai_config import AIConfiguration
 from app.utils.security import hash_password
+from app.services.embedding_service import generate_embedding
+import json
 
 def seed_database():
     Base.metadata.create_all(bind=engine)
@@ -253,7 +255,7 @@ def seed_database():
                 db.add(item)
         db.commit()
 
-        # 6. Seed Sample DEMO Knowledge Documents
+        # 6. Seed Sample DEMO Knowledge Documents and Vector Chunks
         sample_docs = [
             {
                 "title": "Amber Terrace Operating Timings & Valet Guide (Sample)",
@@ -261,7 +263,12 @@ def seed_database():
                 "file_type": "PDF",
                 "outlet_id": 1,
                 "category": "TIMING",
-                "chunk_count": 8,
+                "chunks": [
+                    "Operating Hours: Amber Terrace Rooftop opens daily from 17:30 to 01:30. The kitchen takes final food orders at 00:30, while mixology continues until 01:00. Sunset cocktail hour runs between 17:30 and 19:30 on weekdays with signature sundowner specials.",
+                    "Valet Parking & Location: Complimentary VIP valet parking is available for all guests at the Skyline Tower ground floor lobby (MG Road). Dedicated high-speed elevators transport guests directly to the 14th Floor rooftop reception.",
+                    "Dress Code Policy: Amber Terrace adheres to a Smart Casual dress code. Gentlemen are requested to wear collared shirts or tailored polos with trousers or elegant chinos, paired with closed-toe footwear. Beach flip-flops, athletic sportswear, and sleeveless tank tops are strictly not permitted.",
+                    "Reservation & Seating Policies: Table reservations are held for up to 15 minutes past the reserved time before release. For parties of 6 or more, a credit card authorization or token advance is required. Luxury terrace cabanas require a minimum spend of ₹15,000.",
+                ],
             },
             {
                 "title": "Saffron & Silk Royal Banquet & Menu Roster (Sample)",
@@ -269,7 +276,12 @@ def seed_database():
                 "file_type": "XLSX",
                 "outlet_id": 2,
                 "category": "MENU",
-                "chunk_count": 16,
+                "chunks": [
+                    "Saffron & Silk Cuisine & Hours: Specializing in royal Awadhi, Mughlai, and Dum gastronomy. Open for Lunch from 12:30 to 15:30 and Dinner from 19:00 to 23:45. Located at Amit Heritage Plaza, Ground Level.",
+                    "Signature Non-Vegetarian Specialities: Galouti Kebab with Warqi Paratha (₹850), Dum Gosht Biryani cooked in sealed clay pots (₹950), Slow-simmered Nalli Nihari with saffron essence (₹1,150), Murgh Malai Tikka marinated in Kashmiri cream (₹780).",
+                    "Vegetarian & Jain Provisions: Saffron & Silk operates a dedicated, isolated vegetarian preparation counter. Pure Jain preparations (devoid of root vegetables, onion, and garlic) are available across gravies, dals, and biryanis upon prior notice.",
+                    "Signature Vegetarian Dishes: Paneer Khas Makhani (₹720), Subz Dum Biryani (₹780), 24-hour slow-cooked Dal Heritage (₹650), Dahi ke Kebab with mint reduction (₹680). All bread baskets are baked in copper tandoors.",
+                ],
             },
             {
                 "title": "The Velvet Cellar Dress Code & Weekend Policies (Sample)",
@@ -277,17 +289,22 @@ def seed_database():
                 "file_type": "DOCX",
                 "outlet_id": 3,
                 "category": "POLICY",
-                "chunk_count": 6,
+                "chunks": [
+                    "The Velvet Cellar Operating Schedule: Open Wednesday through Sunday from 18:00 to 02:00. Closed on Mondays and Tuesdays for private cellar maintenance and masterclass tastings.",
+                    "Age Policy & Age Verification: The Velvet Cellar is strictly an adult-only lounge for guests aged 21 and above. Valid government-issued photo identification is required at the entry velvet curtain.",
+                    "Weekend Cover Charge & Reservations: On Friday and Saturday evenings from 20:30 onwards, a cover charge of ₹2,500 per couple applies, which is 100% redeemable against curated food and vintage wine orders. Table reservations are highly recommended.",
+                    "Private Wine Tasting & Sommelier Masterclasses: Exclusive private tastings for up to 12 guests can be reserved in the Vintage Vault. Includes pairings with artisanal cheeses and charcuterie. Contact concierge 48 hours in advance.",
+                ],
             },
         ]
 
         for sd in sample_docs:
-            existing_doc = (
+            kdoc = (
                 db.query(KnowledgeDocument)
                 .filter(KnowledgeDocument.file_name == sd["file_name"], KnowledgeDocument.environment == "DEMO")
                 .first()
             )
-            if not existing_doc:
+            if not kdoc:
                 kdoc = KnowledgeDocument(
                     environment="DEMO",
                     outlet_id=sd["outlet_id"],
@@ -296,11 +313,34 @@ def seed_database():
                     file_type=sd["file_type"],
                     category=sd["category"],
                     verification_status="UNVERIFIED",
-                    chunk_count=sd["chunk_count"],
+                    chunk_count=len(sd["chunks"]),
                     is_active=True,
                 )
                 db.add(kdoc)
-        db.commit()
+                db.commit()
+                db.refresh(kdoc)
+            else:
+                kdoc.chunk_count = len(sd["chunks"])
+                db.commit()
+
+            # Seed chunks if none exist for this doc
+            existing_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == kdoc.id).count()
+            if existing_chunks == 0:
+                for c_idx, chunk_text_content in enumerate(sd["chunks"]):
+                    vec = generate_embedding(chunk_text_content)
+                    meta = {"title": sd["title"], "page": 1, "outlet_id": sd["outlet_id"]}
+                    chunk = KnowledgeChunk(
+                        document_id=kdoc.id,
+                        environment="DEMO",
+                        outlet_id=sd["outlet_id"],
+                        chunk_index=c_idx,
+                        content=chunk_text_content,
+                        metadata_json=json.dumps(meta),
+                        embedding_json=json.dumps(vec),
+                        is_active=True,
+                    )
+                    db.add(chunk)
+                db.commit()
 
         # 7. Seed Sample DEMO Reservations
         if db.query(ReservationRequest).count() == 0:

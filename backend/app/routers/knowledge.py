@@ -1,17 +1,32 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
 import os
 import shutil
+import json
 
 from app.database import get_db
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.audit import EnvironmentSetting, AuditLog
 from app.models.user import User
-from app.schemas.knowledge import KnowledgeDocResponse, ManualKnowledgeCreate
+from app.schemas.knowledge import (
+    KnowledgeDocResponse,
+    KnowledgeDocDetailResponse,
+    ChunkDetailResponse,
+    ManualKnowledgeCreate,
+    DocumentUpdateRequest,
+    DocumentStatusUpdateRequest,
+    KnowledgeSearchResponse,
+    SearchHitResponse,
+    KnowledgeStatsResponse,
+    CategoryCount,
+)
 from app.utils.security import require_roles
 from app.config import settings
+from app.services.document_service import extract_document_content, chunk_text
+from app.services.embedding_service import generate_embedding, search_relevant_chunks
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["Knowledge Base & RAG"])
 
@@ -19,23 +34,118 @@ def get_current_env(db: Session) -> str:
     setting = db.query(EnvironmentSetting).order_by(EnvironmentSetting.id.desc()).first()
     return setting.active_environment if setting else "DEMO"
 
+@router.get("/stats", response_model=KnowledgeStatsResponse)
+def get_knowledge_stats(db: Session = Depends(get_db)):
+    """Retrieve summary metrics across DEMO and REAL knowledge bases."""
+    current_env = get_current_env(db)
+    
+    demo_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.environment == "DEMO").count()
+    real_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.environment == "REAL").count()
+    
+    demo_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.environment == "DEMO").count()
+    real_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.environment == "REAL").count()
+
+    active_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.is_active == True).count()
+    inactive_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.is_active == False).count()
+
+    verified_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.verification_status == "VERIFIED").count()
+    unverified_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.verification_status != "VERIFIED").count()
+
+    categories_raw = (
+        db.query(KnowledgeDocument.category, func.count(KnowledgeDocument.id))
+        .filter(KnowledgeDocument.environment == current_env)
+        .group_by(KnowledgeDocument.category)
+        .all()
+    )
+    categories = [CategoryCount(category=cat, count=cnt) for cat, cnt in categories_raw]
+
+    return KnowledgeStatsResponse(
+        active_environment=current_env,
+        demo_doc_count=demo_docs,
+        real_doc_count=real_docs,
+        demo_chunk_count=demo_chunks,
+        real_chunk_count=real_chunks,
+        total_active_docs=active_docs,
+        total_inactive_docs=inactive_docs,
+        verified_docs_count=verified_docs,
+        unverified_docs_count=unverified_docs,
+        categories=categories,
+    )
+
 @router.get("/documents", response_model=List[KnowledgeDocResponse])
 def list_documents(
     environment: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     outlet_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),  # 'ACTIVE', 'INACTIVE', or 'ALL'
     db: Session = Depends(get_db),
 ):
-    target_env = environment or get_current_env(db)
-    query = db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.environment == target_env,
-        KnowledgeDocument.is_active == True,
+    """List knowledge documents with multi-faceted filtering."""
+    env_str = environment if isinstance(environment, str) else None
+    cat_str = category if isinstance(category, str) else None
+    out_id = outlet_id if isinstance(outlet_id, int) else None
+    status_str = status if isinstance(status, str) else None
+
+    target_env = env_str or get_current_env(db)
+    query = db.query(KnowledgeDocument).filter(KnowledgeDocument.environment == target_env)
+
+    if status_str == "ACTIVE":
+        query = query.filter(KnowledgeDocument.is_active == True)
+    elif status_str == "INACTIVE":
+        query = query.filter(KnowledgeDocument.is_active == False)
+    # If None or ALL, returns both
+
+    if cat_str and cat_str != "ALL":
+        query = query.filter(KnowledgeDocument.category == cat_str)
+    if out_id:
+        query = query.filter(KnowledgeDocument.outlet_id == out_id)
+
+    return query.order_by(KnowledgeDocument.id.desc()).all()
+
+@router.get("/documents/{doc_id}", response_model=KnowledgeDocDetailResponse)
+def get_document_detail(
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    """Retrieve detailed document info with all chunk extracts."""
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Knowledge document not found")
+    
+    chunks = (
+        db.query(KnowledgeChunk)
+        .filter(KnowledgeChunk.document_id == doc.id)
+        .order_by(KnowledgeChunk.chunk_index.asc())
+        .all()
     )
-    if category and category != "ALL":
-        query = query.filter(KnowledgeDocument.category == category)
-    if outlet_id:
-        query = query.filter(KnowledgeDocument.outlet_id == outlet_id)
-    return query.all()
+
+    return KnowledgeDocDetailResponse(
+        id=doc.id,
+        environment=doc.environment,
+        outlet_id=doc.outlet_id,
+        title=doc.title,
+        file_name=doc.file_name,
+        file_type=doc.file_type,
+        file_size_bytes=doc.file_size_bytes,
+        category=doc.category,
+        verification_status=doc.verification_status,
+        verified_by=doc.verified_by,
+        verified_at=doc.verified_at,
+        chunk_count=doc.chunk_count,
+        is_active=doc.is_active,
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+        chunks=[
+            ChunkDetailResponse(
+                id=c.id,
+                chunk_index=c.chunk_index,
+                content=c.content,
+                is_active=c.is_active,
+                created_at=c.created_at,
+            )
+            for c in chunks
+        ],
+    )
 
 @router.post("/upload", response_model=KnowledgeDocResponse)
 async def upload_document(
@@ -46,8 +156,14 @@ async def upload_document(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
     db: Session = Depends(get_db),
 ):
+    """
+    Upload real verified document (PDF, DOCX, XLSX, CSV, TXT).
+    Processes text, creates semantic chunks, generates vectors, and indexes into store.
+    """
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(settings.UPLOAD_DIR, f"{int(datetime.utcnow().timestamp())}_{file.filename}")
+    timestamp_prefix = int(datetime.utcnow().timestamp())
+    safe_filename = f"{timestamp_prefix}_{file.filename}"
+    file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -55,13 +171,26 @@ async def upload_document(
     file_size = os.path.getsize(file_path)
     ext = file.filename.split(".")[-1].upper() if "." in file.filename else "TXT"
 
-    # Simulated chunking count
-    estimated_chunks = max(2, min(50, file_size // 1000 + 2))
+    # Extract structured sections
+    sections = extract_document_content(file_path, ext)
+    
+    # Semantic chunking
+    chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
+    if not chunks_data:
+        chunks_data = [{
+            "chunk_index": 0,
+            "title": file.filename,
+            "page_number": 1,
+            "content": f"Document: {file.filename} (Processed empty document)",
+            "word_count": 5
+        }]
 
+    # Create document record
+    clean_title = file.filename.replace("_", " ").rsplit(".", 1)[0]
     new_doc = KnowledgeDocument(
         environment=environment,
         outlet_id=outlet_id,
-        title=file.filename.replace("_", " ").split(".")[0],
+        title=clean_title,
         file_name=file.filename,
         file_type=ext if ext in ["PDF", "DOCX", "XLSX", "CSV", "TXT"] else "TXT",
         file_path=file_path,
@@ -71,14 +200,37 @@ async def upload_document(
         verification_status="VERIFIED" if environment == "REAL" else "UNVERIFIED",
         verified_by=current_user.full_name if environment == "REAL" else None,
         verified_at=datetime.utcnow() if environment == "REAL" else None,
-        chunk_count=estimated_chunks,
+        chunk_count=len(chunks_data),
         is_active=True,
     )
     db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
 
-    # Create audit log
+    # Generate embeddings and persist chunks
+    for chk in chunks_data:
+        chunk_content = chk["content"]
+        vec = generate_embedding(chunk_content)
+        chunk_meta = {
+            "title": chk.get("title", clean_title),
+            "page_number": chk.get("page_number", 1),
+            "word_count": chk.get("word_count", 0),
+        }
+        chunk_record = KnowledgeChunk(
+            document_id=new_doc.id,
+            environment=environment,
+            outlet_id=outlet_id,
+            chunk_index=chk["chunk_index"],
+            content=chunk_content,
+            metadata_json=json.dumps(chunk_meta),
+            embedding_json=json.dumps(vec),
+            is_active=True,
+        )
+        db.add(chunk_record)
+
+    db.commit()
+
+    # Immutable Audit Log
     audit = AuditLog(
         user_id=current_user.id,
         user_name=current_user.full_name,
@@ -87,7 +239,7 @@ async def upload_document(
         entity_type="KNOWLEDGE_DOCUMENT",
         entity_id=new_doc.id,
         environment=environment,
-        details=f"Uploaded and indexed '{file.filename}' into {environment} knowledge store with {estimated_chunks} vector chunks.",
+        details=f"Uploaded and indexed '{file.filename}' ({ext}, {file_size} bytes) into {environment} knowledge store with {len(chunks_data)} vector chunks.",
     )
     db.add(audit)
     db.commit()
@@ -100,7 +252,18 @@ def add_manual_knowledge(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
     db: Session = Depends(get_db),
 ):
-    chunk_count = max(1, len(req.content) // 400 + 1)
+    """Manually add policy, menu details, timing or FAQ directly into knowledge store."""
+    sections = [{"title": req.title, "page_number": 1, "content": req.content}]
+    chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
+    if not chunks_data:
+        chunks_data = [{
+            "chunk_index": 0,
+            "title": req.title,
+            "page_number": 1,
+            "content": req.content,
+            "word_count": len(req.content.split())
+        }]
+
     new_doc = KnowledgeDocument(
         environment=req.environment,
         outlet_id=req.outlet_id,
@@ -112,26 +275,173 @@ def add_manual_knowledge(
         verification_status="VERIFIED" if req.environment == "REAL" else "UNVERIFIED",
         verified_by=current_user.full_name if req.environment == "REAL" else None,
         verified_at=datetime.utcnow() if req.environment == "REAL" else None,
-        chunk_count=chunk_count,
+        chunk_count=len(chunks_data),
         is_active=True,
     )
     db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
 
-    # Add chunk
-    chunk = KnowledgeChunk(
-        document_id=new_doc.id,
+    for chk in chunks_data:
+        vec = generate_embedding(chk["content"])
+        chunk_record = KnowledgeChunk(
+            document_id=new_doc.id,
+            environment=req.environment,
+            outlet_id=req.outlet_id,
+            chunk_index=chk["chunk_index"],
+            content=chk["content"],
+            metadata_json=json.dumps({"title": req.title, "page": 1}),
+            embedding_json=json.dumps(vec),
+            is_active=True,
+        )
+        db.add(chunk_record)
+
+    db.commit()
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        user_role=current_user.role,
+        action="KNOWLEDGE_MANUAL_ENTRY",
+        entity_type="KNOWLEDGE_DOCUMENT",
+        entity_id=new_doc.id,
         environment=req.environment,
-        outlet_id=req.outlet_id,
-        chunk_index=0,
-        content=req.content,
-        is_active=True,
+        details=f"Created manual knowledge entry '{req.title}' ({req.category}) in {req.environment} store.",
     )
-    db.add(chunk)
+    db.add(audit)
     db.commit()
 
     return new_doc
+
+@router.put("/documents/{doc_id}", response_model=KnowledgeDocResponse)
+def update_document(
+    doc_id: int,
+    req: DocumentUpdateRequest,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """Update knowledge document metadata (title, category, outlet)."""
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if req.title is not None:
+        doc.title = req.title
+    if req.category is not None:
+        doc.category = req.category
+    if req.outlet_id is not None:
+        doc.outlet_id = req.outlet_id
+        # Update associated chunks outlet_id
+        db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc.id).update(
+            {"outlet_id": req.outlet_id}
+        )
+
+    doc.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+@router.patch("/documents/{doc_id}/status", response_model=KnowledgeDocResponse)
+def toggle_document_status(
+    doc_id: int,
+    req: DocumentStatusUpdateRequest,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """Activate or deactivate a document and all its indexed vector chunks."""
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc.is_active = req.is_active
+    doc.updated_at = datetime.utcnow()
+
+    # Cascade to all chunks
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc.id).update(
+        {"is_active": req.is_active}
+    )
+    db.commit()
+    db.refresh(doc)
+
+    status_str = "activated" if req.is_active else "deactivated"
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        user_role=current_user.role,
+        action="KNOWLEDGE_STATUS_TOGGLE",
+        entity_type="KNOWLEDGE_DOCUMENT",
+        entity_id=doc.id,
+        environment=doc.environment,
+        details=f"Document '{doc.title}' (ID {doc.id}) {status_str} in {doc.environment} store.",
+    )
+    db.add(audit)
+    db.commit()
+
+    return doc
+
+@router.post("/documents/{doc_id}/reprocess", response_model=KnowledgeDocResponse)
+def reprocess_document(
+    doc_id: int,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """
+    Reprocess and reindex an existing document from original file or stored content.
+    Refreshes all chunks and vectors.
+    """
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.file_path and os.path.exists(doc.file_path):
+        sections = extract_document_content(doc.file_path, doc.file_type)
+    else:
+        # Fallback to existing chunks text if original uploaded file was cleared
+        existing_chunks = db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc.id).all()
+        aggregated = "\n\n".join([c.content for c in existing_chunks])
+        sections = [{"title": doc.title, "page_number": 1, "content": aggregated}]
+
+    chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
+    if not chunks_data:
+        raise HTTPException(status_code=400, detail="Unable to extract chunks during reprocessing")
+
+    # Clear old chunks
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == doc.id).delete()
+
+    # Re-insert new chunks with fresh embeddings
+    for chk in chunks_data:
+        vec = generate_embedding(chk["content"])
+        chunk_record = KnowledgeChunk(
+            document_id=doc.id,
+            environment=doc.environment,
+            outlet_id=doc.outlet_id,
+            chunk_index=chk["chunk_index"],
+            content=chk["content"],
+            metadata_json=json.dumps({"title": doc.title, "page": chk.get("page_number", 1)}),
+            embedding_json=json.dumps(vec),
+            is_active=doc.is_active,
+        )
+        db.add(chunk_record)
+
+    doc.chunk_count = len(chunks_data)
+    doc.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(doc)
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        user_role=current_user.role,
+        action="KNOWLEDGE_REPROCESS",
+        entity_type="KNOWLEDGE_DOCUMENT",
+        entity_id=doc.id,
+        environment=doc.environment,
+        details=f"Reprocessed and reindexed '{doc.title}' with {len(chunks_data)} new chunks.",
+    )
+    db.add(audit)
+    db.commit()
+
+    return doc
 
 @router.delete("/documents/{doc_id}")
 def delete_document(
@@ -139,10 +449,88 @@ def delete_document(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN")),
     db: Session = Depends(get_db),
 ):
+    """Delete document and all associated chunks permanently."""
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    doc_title = doc.title
+    doc_env = doc.environment
+
+    # Delete physical file if present
+    if doc.file_path and os.path.exists(doc.file_path):
+        try:
+            os.remove(doc.file_path)
+        except Exception:
+            pass
+
+    # Cascades to delete chunks
     db.delete(doc)
     db.commit()
-    return {"success": True, "message": "Document and associated vector chunks removed"}
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        user_role=current_user.role,
+        action="KNOWLEDGE_DELETE",
+        entity_type="KNOWLEDGE_DOCUMENT",
+        entity_id=doc_id,
+        environment=doc_env,
+        details=f"Deleted document '{doc_title}' (ID {doc_id}) from {doc_env} store.",
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"success": True, "message": f"Document '{doc_title}' removed"}
+
+@router.get("/search", response_model=KnowledgeSearchResponse)
+def search_knowledge(
+    q: str = Query(..., description="Query phrase or customer question"),
+    environment: Optional[str] = Query(None),
+    outlet_id: Optional[int] = Query(None),
+    category: Optional[str] = Query(None),
+    top_k: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """
+    Search knowledge chunks using hybrid vector + lexical retrieval.
+    Guarantees strict isolation: searches ONLY the selected/active environment.
+    """
+    env_str = environment if isinstance(environment, str) else None
+    cat_str = category if isinstance(category, str) else None
+    out_id = outlet_id if isinstance(outlet_id, int) else None
+    k_val = top_k if isinstance(top_k, int) else 5
+
+    target_env = env_str or get_current_env(db)
+    results = search_relevant_chunks(
+        db=db,
+        query=q,
+        environment=target_env,
+        outlet_id=out_id,
+        category=cat_str,
+        top_k=k_val,
+    )
+
+    hits = [
+        SearchHitResponse(
+            chunk_id=r["chunk_id"],
+            document_id=r["document_id"],
+            document_title=r["document_title"],
+            category=r["category"],
+            environment=r["environment"],
+            outlet_id=r["outlet_id"],
+            chunk_index=r["chunk_index"],
+            content=r["content"],
+            score=r["score"],
+            cosine_similarity=r["cosine_similarity"],
+            lexical_overlap=r["lexical_overlap"],
+        )
+        for r in results
+    ]
+
+    return KnowledgeSearchResponse(
+        query=q,
+        environment=target_env,
+        total_hits=len(hits),
+        results=hits,
+    )
