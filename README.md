@@ -105,9 +105,32 @@ npm run dev
 ```
 Customer Concierge & Management Portal will be available at: http://localhost:5173
 
+### 3. Master Test Verification
+To run all automated test suites across all 7 development phases:
+```bash
+cd backend
+python tests/run_all_tests.py
+```
+
+### 4. Embeddable Widget Integration
+To embed the Amit AI Concierge onto any webpage on `https://amithospitality.com/`:
+```html
+<!-- Drop this single script tag into your website body -->
+<script src="http://localhost:5173/widget.js" 
+        data-outlet="amber-terrace" 
+        data-accent-color="#D4AF37" 
+        data-position="bottom-right"></script>
+```
+Test page available at: http://localhost:5173/embed-test.html
+
 ---
 
 ## Default Administrator Credentials
 - **Email:** `admin@amithospitality.com`
 - **Password:** `AmitConcierge2026!Secure`
 - **Default Mode:** `DEMO MODE` (sample data preloaded)
+
+---
+
+## Executive Demonstration Walkthrough
+For the complete 10-minute stakeholder presentation script and feature-by-feature demonstration guide, please refer to [docs/EXECUTIVE_DEMO_WALKTHROUGH.md](file:///c:/Users/india/Desktop/amit%20hospitality/docs/EXECUTIVE_DEMO_WALKTHROUGH.md).

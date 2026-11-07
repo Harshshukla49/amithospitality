@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Environment, AuditLog } from '../types';
 import { INITIAL_AUDIT_LOGS } from '../utils/mockData';
+import { switchEnvironmentApi } from '../api/knowledge';
+import { fetchAuditLogsApi } from '../api/audit';
 
 interface EnvironmentContextType {
   environment: Environment;
   isDemo: boolean;
   auditLogs: AuditLog[];
-  switchEnvironment: (target: Environment, reason: string, adminName: string) => void;
+  switchEnvironment: (target: Environment, reason: string, adminName: string) => Promise<void>;
   pendingSwitch: { target: Environment; isOpen: boolean } | null;
   openSwitchModal: (target: Environment) => void;
   closeSwitchModal: () => void;
+  refreshAuditLogs: () => Promise<void>;
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType | undefined>(undefined);
@@ -23,8 +26,20 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [pendingSwitch, setPendingSwitch] = useState<{ target: Environment; isOpen: boolean } | null>(null);
 
+  const loadAuditLogs = async () => {
+    try {
+      const logs = await fetchAuditLogsApi(50);
+      if (logs && logs.length > 0) {
+        setAuditLogs(logs);
+      }
+    } catch (e) {
+      console.warn('Audit logs backend sync notice:', e);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('amit_concierge_env', environment);
+    loadAuditLogs();
   }, [environment]);
 
   const openSwitchModal = (target: Environment) => {
@@ -35,11 +50,17 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setPendingSwitch(null);
   };
 
-  const switchEnvironment = (target: Environment, reason: string, adminName: string) => {
+  const switchEnvironment = async (target: Environment, reason: string, adminName: string) => {
+    try {
+      await switchEnvironmentApi(target, reason);
+    } catch (e) {
+      console.warn('Backend switch call notice:', e);
+    }
+
     const newLog: AuditLog = {
       id: Date.now(),
       userName: adminName,
-      userRole: 'ADMIN',
+      userRole: 'SUPER_ADMIN',
       action: 'ENVIRONMENT_SWITCH',
       entityType: 'ENVIRONMENT_SETTINGS',
       details: `Switched mode from ${environment} to ${target}. Reason: ${reason}`,
@@ -62,6 +83,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
         pendingSwitch,
         openSwitchModal,
         closeSwitchModal,
+        refreshAuditLogs: loadAuditLogs,
       }}
     >
       {children}

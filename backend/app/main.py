@@ -5,6 +5,7 @@ import os
 
 from app.config import settings
 from app.database import Base, engine
+from app.utils.security_middleware import SecurityHeadersMiddleware, RateLimitMiddleware
 from app.routers import (
     auth,
     environment,
@@ -39,6 +40,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(auth.router)
 app.include_router(environment.router)

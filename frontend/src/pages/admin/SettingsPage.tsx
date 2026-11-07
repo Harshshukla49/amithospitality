@@ -8,8 +8,10 @@ import {
   CheckCircle,
   AlertTriangle,
   Cpu,
+  Download,
 } from 'lucide-react';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import { exportAuditLogsCsv } from '../../api/audit';
 
 export const SettingsPage: React.FC = () => {
   const { environment, isDemo, openSwitchModal, auditLogs } = useEnvironment();
@@ -19,6 +21,26 @@ export const SettingsPage: React.FC = () => {
   const [temperature, setTemperature] = useState(0.2);
   const [topK, setTopK] = useState(4);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
+
+  const handleExportAuditTrail = async () => {
+    try {
+      setExportingAudit(true);
+      const blob = await exportAuditLogsCsv(environment);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `amit_hospitality_audit_trail_${environment.toLowerCase()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export audit trail', err);
+    } finally {
+      setExportingAudit(false);
+    }
+  };
 
   const handleSaveAIConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,16 +197,27 @@ export const SettingsPage: React.FC = () => {
 
       {/* Immutable Audit Trail Table */}
       <div className="p-6 rounded-2xl glass-panel border border-slate-800 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-gold-400">
             <History className="w-5 h-5" />
-            <h3 className="font-serif font-bold text-base text-white">
-              Compliance & Environment Audit Trail
-            </h3>
+            <div>
+              <h3 className="font-serif font-bold text-base text-white">
+                Compliance & Environment Audit Trail
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {auditLogs.length} immutable records logged for security & compliance
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">
-            {auditLogs.length} immutable records
-          </span>
+          <button
+            onClick={handleExportAuditTrail}
+            disabled={exportingAudit || auditLogs.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-gold-300 border border-slate-700 text-xs font-medium transition disabled:opacity-50 self-start sm:self-auto"
+            title="Export full compliance audit log to CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{exportingAudit ? 'Exporting...' : 'Export Audit Trail (.CSV)'}</span>
+          </button>
         </div>
 
         <div className="overflow-x-auto">

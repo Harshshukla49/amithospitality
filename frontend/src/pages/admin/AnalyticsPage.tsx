@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -12,13 +12,41 @@ import {
 } from 'lucide-react';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { INITIAL_OUTLETS } from '../../utils/mockData';
+import { fetchDashboardKPIs, exportAnalyticsSummaryCsv, DashboardKPIData } from '../../api/analytics';
 
 export const AnalyticsPage: React.FC = () => {
   const { environment, isDemo } = useEnvironment();
   const [dateRange, setDateRange] = useState('7D');
   const [selectedOutlet, setSelectedOutlet] = useState('ALL');
+  const [kpiData, setKpiData] = useState<DashboardKPIData | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  const topQueries = [
+  const handleExportReport = async () => {
+    try {
+      setExporting(true);
+      const blob = await exportAnalyticsSummaryCsv();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `amit_hospitality_analytics_${environment.toLowerCase()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export analytics report', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardKPIs()
+      .then((data) => setKpiData(data))
+      .catch((e) => console.warn('Could not load live analytics:', e));
+  }, [environment]);
+
+  const topQueries = kpiData?.frequent_queries || [
     { query: 'Show me the signature chef tasting menu & prices', count: 342, category: 'MENU' },
     { query: 'What are dinner operating hours & valet parking policy?', count: 289, category: 'TIMING' },
     { query: 'Do you offer strictly Jain or vegan preparations?', count: 215, category: 'DIETARY' },
@@ -27,7 +55,7 @@ export const AnalyticsPage: React.FC = () => {
     { query: 'Private dining room pricing for corporate executive dinner', count: 112, category: 'LEAD' },
   ];
 
-  const unansweredQuestions = [
+  const unansweredQuestions = kpiData?.unanswered_questions || [
     {
       question: 'Do you allow outside birthday cakes and what is the plating fee?',
       frequency: 28,
@@ -66,7 +94,7 @@ export const AnalyticsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Date Filter */}
+        {/* Date Filter & Export */}
         <div className="flex items-center gap-2">
           <div className="flex items-center p-1 rounded-xl bg-charcoal-900 border border-slate-700/80 text-xs">
             {['24H', '7D', '30D', 'ALL'].map((range) => (
@@ -83,6 +111,16 @@ export const AnalyticsPage: React.FC = () => {
               </button>
             ))}
           </div>
+
+          <button
+            onClick={handleExportReport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-gold-300 border border-slate-700 text-xs font-medium transition disabled:opacity-50"
+            title="Download executive analytics CSV report"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{exporting ? 'Exporting...' : 'Export Report'}</span>
+          </button>
         </div>
       </div>
 
@@ -93,7 +131,9 @@ export const AnalyticsPage: React.FC = () => {
             <span className="text-xs uppercase tracking-wider font-medium">Guest Inquiries</span>
             <MessageSquare className="w-4 h-4 text-gold-400" />
           </div>
-          <div className="text-2xl font-bold font-serif text-white">1,482</div>
+          <div className="text-2xl font-bold font-serif text-white">
+            {kpiData?.total_conversations.toLocaleString('en-IN') || '1,482'}
+          </div>
           <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
             <TrendingUp className="w-3.5 h-3.5" /> +14.2% vs previous period
           </p>
@@ -101,20 +141,24 @@ export const AnalyticsPage: React.FC = () => {
 
         <div className="p-5 rounded-2xl glass-panel border border-slate-800">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs uppercase tracking-wider font-medium">Guest Satisfaction</span>
-            <ThumbsUp className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs uppercase tracking-wider font-medium">Pending Reservations</span>
+            <Calendar className="w-4 h-4 text-gold-400" />
           </div>
-          <div className="text-2xl font-bold font-serif text-white">98.2%</div>
-          <p className="text-[11px] text-slate-400 mt-1">Based on 642 guest ratings</p>
+          <div className="text-2xl font-bold font-serif text-white">
+            {kpiData?.pending_reservations ?? 14}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">Awaiting maître d' review</p>
         </div>
 
         <div className="p-5 rounded-2xl glass-panel border border-slate-800">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs uppercase tracking-wider font-medium">Booking Conversion</span>
-            <Calendar className="w-4 h-4 text-gold-400" />
+            <span className="text-xs uppercase tracking-wider font-medium">Event Leads</span>
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-2xl font-bold font-serif text-white">24.6%</div>
-          <p className="text-[11px] text-emerald-400 mt-1">Queries resulting in reservation requests</p>
+          <div className="text-2xl font-bold font-serif text-white">
+            {kpiData?.total_leads ?? 8}
+          </div>
+          <p className="text-[11px] text-emerald-400 mt-1">Banquets & private dining</p>
         </div>
 
         <div className="p-5 rounded-2xl glass-panel border border-slate-800">

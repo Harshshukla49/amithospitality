@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Optional
+from typing import List, Optional, Any
 import io
 import csv
 
@@ -101,6 +101,7 @@ def list_reservations(
 def update_reservation_status(
     res_id: int,
     status_update: ReservationStatusUpdate,
+    current_user: Any = None,
     db: Session = Depends(get_db),
 ):
     res = db.query(ReservationRequest).filter(ReservationRequest.id == res_id).first()
@@ -113,9 +114,11 @@ def update_reservation_status(
         res.internal_notes = status_update.internal_notes
 
     # Create immutable audit log
+    audit_user_name = current_user.full_name if (current_user and hasattr(current_user, "full_name")) else "Staff / Admin"
+    audit_user_role = current_user.role if (current_user and hasattr(current_user, "role")) else "STAFF"
     audit = AuditLog(
-        user_name="Staff / Admin",
-        user_role="STAFF",
+        user_name=audit_user_name,
+        user_role=audit_user_role,
         action="RESERVATION_STATUS_UPDATE",
         entity_type="RESERVATION",
         entity_id=res.id,
@@ -130,6 +133,7 @@ def update_reservation_status(
 @router.get("/export")
 def export_reservations_csv(
     environment: Optional[str] = Query(None),
+    current_user: Any = None,
     db: Session = Depends(get_db),
 ):
     target_env = environment if isinstance(environment, str) else get_current_env(db)

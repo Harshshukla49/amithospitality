@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends
+import csv
+import io
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.database import get_db
 from app.models.conversation import Conversation
@@ -7,7 +10,9 @@ from app.models.reservation import ReservationRequest
 from app.models.lead import Lead
 from app.models.knowledge import KnowledgeDocument
 from app.models.audit import EnvironmentSetting
+from app.models.user import User
 from app.schemas.analytics import DashboardKPIs, FrequentQueryItem, UnansweredItem
+from app.utils.security import require_roles
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics & Reporting"])
 
@@ -74,4 +79,39 @@ def get_dashboard_kpis(db: Session = Depends(get_db)):
         active_environment=active_env,
         frequent_queries=frequent_queries,
         unanswered_questions=unanswered,
+    )
+
+@router.get("/export")
+def export_analytics_summary_csv(
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
+    db: Session = Depends(get_db),
+):
+    active_env = get_current_env(db)
+    kpis = get_dashboard_kpis(db=db)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["AMIT AI CONCIERGE — EXECUTIVE ANALYTICS REPORT"])
+    writer.writerow(["Active Environment", active_env])
+    writer.writerow([])
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Total Concierge Conversations", kpis.total_conversations])
+    writer.writerow(["Pending Table Reservations", kpis.pending_reservations])
+    writer.writerow(["Total Event & Banquet Leads", kpis.total_leads])
+    writer.writerow(["Active Knowledge Documents", kpis.active_documents])
+    writer.writerow([])
+    writer.writerow(["TOP FREQUENT GUEST INQUIRIES"])
+    writer.writerow(["Rank", "Category", "Inquiry", "Query Count"])
+    for idx, item in enumerate(kpis.frequent_queries, start=1):
+        writer.writerow([idx, item.category, item.query, item.count])
+    writer.writerow([])
+    writer.writerow(["KNOWLEDGE GAPS & UNANSWERED QUESTIONS"])
+    writer.writerow(["Question", "Frequency", "Outlet", "Recommended Action"])
+    for u in kpis.unanswered_questions:
+        writer.writerow([u.question, u.frequency, u.outlet, u.suggestion])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=amit_analytics_{active_env.lower()}.csv"},
     )

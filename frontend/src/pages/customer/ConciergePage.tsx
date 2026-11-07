@@ -15,6 +15,8 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertTriangle,
+  Globe,
+  X,
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useEnvironment } from '../../context/EnvironmentContext';
@@ -26,11 +28,13 @@ import { LeadModal } from '../../components/customer/LeadModal';
 interface ConciergePageProps {
   onReservationCreated?: (res: ReservationRequest) => void;
   onLeadCreated?: (lead: Lead) => void;
+  isEmbedded?: boolean;
 }
 
 export const ConciergePage: React.FC<ConciergePageProps> = ({
   onReservationCreated,
   onLeadCreated,
+  isEmbedded = false,
 }) => {
   const {
     messages,
@@ -39,6 +43,8 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
     sendMessage,
     clearChat,
     isTyping,
+    language,
+    setLanguage,
     provideFeedback,
     requestHandover,
     handoverRequested,
@@ -83,9 +89,10 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 gap-4">
+    <div className={`flex flex-col lg:flex-row ${isEmbedded ? 'h-full p-2' : 'h-[calc(100vh-4rem)] max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 gap-4'}`}>
       {/* Left Sidebar: Outlet Selection & Luxury Destination Highlights */}
-      <div className="lg:w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">
+      {!isEmbedded && (
+        <div className="lg:w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">
         {/* Brand Showcase Card */}
         <div className="p-4 rounded-2xl glass-panel-elevated border border-gold-400/30">
           <div className="flex items-center gap-2 text-gold-400 mb-1.5">
@@ -196,39 +203,95 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Center & Right: Luxury Conversational AI Concierge Terminal */}
       <div className="flex-1 flex flex-col rounded-2xl glass-panel-elevated border border-gold-400/30 overflow-hidden shadow-luxury">
         {/* Chat Header */}
-        <div className="px-5 py-3.5 border-b border-slate-800/80 bg-charcoal-900/70 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-obsidian-950 shadow-gold-glow">
+        <div className="px-4 sm:px-5 py-3 border-b border-slate-800/80 bg-charcoal-900/70 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-obsidian-950 shadow-gold-glow shrink-0">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-serif font-bold text-white tracking-wide">
-                  {selectedOutlet.name} Concierge
-                </h3>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                {isEmbedded ? (
+                  <select
+                    value={selectedOutlet.id}
+                    onChange={(e) => {
+                      const found = INITIAL_OUTLETS.find((o) => o.id === Number(e.target.value));
+                      if (found) setSelectedOutlet(found);
+                    }}
+                    className="text-xs bg-charcoal-900 border border-gold-400/50 text-gold-300 rounded-lg px-2 py-0.5 font-serif font-bold focus:outline-none"
+                  >
+                    {INITIAL_OUTLETS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <h3 className="text-sm font-serif font-bold text-white tracking-wide">
+                    {selectedOutlet.name} Concierge
+                  </h3>
+                )}
+                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   Online
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Grounding: {isDemo ? 'DEMO Knowledge Base (Fictional)' : 'REAL Verified Knowledge Base'}
+              <p className="text-[10px] text-slate-400">
+                {isDemo ? 'DEMO Mode (Sample Data)' : 'REAL Verified Knowledge'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Multilingual Selector: EN / हिन्दी */}
+            <div className="flex items-center rounded-lg bg-charcoal-900 border border-slate-700/80 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setLanguage('EN')}
+                className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold transition ${
+                  language === 'EN'
+                    ? 'bg-gold-500/20 text-gold-300 border border-gold-400/40'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Converse in English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('HI')}
+                className={`px-2 py-0.5 rounded font-sans text-[10px] font-bold transition ${
+                  language === 'HI'
+                    ? 'bg-gold-500/20 text-gold-300 border border-gold-400/40'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Converse in हिन्दी / Hinglish"
+              >
+                हिन्दी
+              </button>
+            </div>
+
             <button
               onClick={clearChat}
               title="Clear conversation and restart"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-charcoal-800 transition"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-charcoal-800 transition"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="hidden md:inline">Reset</span>
             </button>
+
+            {isEmbedded && (
+              <button
+                onClick={() => window.parent.postMessage('amit-close-widget', '*')}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-charcoal-800 transition"
+                title="Close Concierge"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 

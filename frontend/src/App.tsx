@@ -91,13 +91,18 @@ const MainLayout: React.FC = () => {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
   };
 
+  const isEmbedded = typeof window !== 'undefined' && (
+    window.location.search.includes('embed=true') ||
+    window.self !== window.top
+  );
+
   return (
     <div className="min-h-screen flex flex-col bg-obsidian-950 text-slate-100 font-sans">
-      {/* Prominent Demo Mode Disclaimer Banner */}
-      <DemoBanner />
+      {/* Prominent Demo Mode Disclaimer Banner (Only in standalone app) */}
+      {!isEmbedded && <DemoBanner />}
 
-      {/* Global Luxury Navigation Header */}
-      <Header currentView={currentView} onViewChange={setCurrentView} />
+      {/* Global Luxury Navigation Header (Only in standalone app) */}
+      {!isEmbedded && <Header currentView={currentView} onViewChange={setCurrentView} />}
 
       {/* Main View Port */}
       {currentView === 'CUSTOMER' ? (
@@ -105,6 +110,7 @@ const MainLayout: React.FC = () => {
           <ConciergePage
             onReservationCreated={handleAddReservation}
             onLeadCreated={handleAddLead}
+            isEmbedded={isEmbedded}
           />
         </main>
       ) : (
