@@ -23,6 +23,9 @@ export interface Outlet {
   location: string;
   description: string;
   isPopular?: boolean;
+  imageUrl?: string;
+  signatureBadge?: string;
+  floorLocation?: string;
 }
 
 export type DietaryFlag = 'VEG' | 'NON_VEG' | 'VEGAN' | 'JAIN' | 'GLUTEN_FREE';

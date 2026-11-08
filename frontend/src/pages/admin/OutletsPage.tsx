@@ -102,23 +102,39 @@ export const OutletsPage: React.FC = () => {
       </div>
 
       {/* Outlet Selection Tabs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {outlets.map((outlet) => {
           const isSelected = outlet.id === selectedOutletId;
           return (
             <div
               key={outlet.id}
               onClick={() => setSelectedOutletId(outlet.id)}
-              className={`p-4 rounded-2xl cursor-pointer transition border relative ${
+              className={`rounded-2xl cursor-pointer transition border relative overflow-hidden flex flex-col ${
                 isSelected
-                  ? 'bg-charcoal-800/90 border-gold-400/80 shadow-gold-glow'
+                  ? 'bg-charcoal-800/95 border-gold-400 shadow-gold-glow'
                   : 'glass-panel border-slate-800/80 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-start justify-between">
+              {outlet.imageUrl && (
+                <div className="h-28 w-full overflow-hidden relative bg-obsidian-950">
+                  <img
+                    src={outlet.imageUrl}
+                    alt={outlet.name}
+                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/outlets/fallback-outlet.webp';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal-900 via-charcoal-900/30 to-transparent" />
+                  <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-950/80 text-gold-400 border border-slate-700 backdrop-blur-sm">
+                    {outlet.seatingCapacity} seats
+                  </span>
+                </div>
+              )}
+              <div className="p-3.5 flex-1 flex flex-col justify-between">
                 <div>
                   <h3
-                    className={`font-serif font-bold text-base ${
+                    className={`font-serif font-bold text-sm sm:text-base ${
                       isSelected ? 'text-gold-300' : 'text-white'
                     }`}
                   >
@@ -126,19 +142,16 @@ export const OutletsPage: React.FC = () => {
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">{outlet.cuisineType}</p>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-charcoal-900 text-gold-400 border border-slate-700">
-                  {outlet.seatingCapacity} seats
-                </span>
-              </div>
 
-              <div className="mt-3 pt-2 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
-                <div className="flex items-center gap-1.5 truncate">
-                  <Clock className="w-3.5 h-3.5 text-gold-400 shrink-0" />
-                  <span>{outlet.openingTime} - {outlet.closingTime}</span>
-                </div>
-                <div className="flex items-center gap-1.5 truncate">
-                  <MapPin className="w-3.5 h-3.5 text-gold-400 shrink-0" />
-                  <span className="truncate">{outlet.location.split(',')[0]}</span>
+                <div className="mt-3 pt-2 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Clock className="w-3.5 h-3.5 text-gold-400 shrink-0" />
+                    <span>{outlet.openingTime} - {outlet.closingTime}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <MapPin className="w-3.5 h-3.5 text-gold-400 shrink-0" />
+                    <span className="truncate">{outlet.location.split(',')[0]}</span>
+                  </div>
                 </div>
               </div>
             </div>

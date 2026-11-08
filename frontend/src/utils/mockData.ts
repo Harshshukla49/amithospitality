@@ -12,8 +12,11 @@ export const INITIAL_OUTLETS: Outlet[] = [
     dressCode: 'Smart Casual (Collared shirts, tailored trousers/dresses; no athletic shorts)',
     seatingCapacity: 120,
     location: '14th Floor, Skyline Tower, MG Road',
+    floorLocation: '14th Floor Skyline Rooftop',
     description: 'Elevated al fresco dining with panoramic city skyline views, bespoke mixology, and progressive Asian gastronomy.',
     isPopular: true,
+    signatureBadge: 'Signature Rooftop Destination',
+    imageUrl: '/images/outlets/amber-terrace-rooftop.webp',
   },
   {
     id: 2,
@@ -26,8 +29,11 @@ export const INITIAL_OUTLETS: Outlet[] = [
     dressCode: 'Formal / Elegant Evening Attire',
     seatingCapacity: 85,
     location: 'Lobby Level, Amit Heritage Plaza',
+    floorLocation: 'Grand Lobby Level Plaza',
     description: 'An ode to imperial Indian banquets featuring slow-cooked dum preparations, rare spices, and artisanal bread pairings.',
     isPopular: true,
+    signatureBadge: 'Royal Fine Dining Heritage',
+    imageUrl: '/images/outlets/saffron-and-silk.webp',
   },
   {
     id: 3,
@@ -40,8 +46,11 @@ export const INITIAL_OUTLETS: Outlet[] = [
     dressCode: 'Chic Lounge Wear',
     seatingCapacity: 60,
     location: 'Sub-level 1, Amit Heritage Plaza',
+    floorLocation: 'Sub-level 1 Jazz Vault',
     description: 'An intimate subterranean sanctuary dedicated to rare single malts, botanical infusions, vintage champagnes, and live jazz.',
     isPopular: false,
+    signatureBadge: 'Exclusive Speakeasy Vault',
+    imageUrl: '/images/outlets/velvet-cellar.webp',
   },
 ];
 

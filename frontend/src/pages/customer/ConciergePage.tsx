@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   Globe,
   X,
+  MessageSquare,
+  Compass,
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useEnvironment } from '../../context/EnvironmentContext';
@@ -24,6 +26,8 @@ import { INITIAL_OUTLETS } from '../../utils/mockData';
 import { Outlet, ReservationRequest, Lead } from '../../types';
 import { ReservationModal } from '../../components/customer/ReservationModal';
 import { LeadModal } from '../../components/customer/LeadModal';
+import { MenuModal } from '../../components/customer/MenuModal';
+import { OutletCard } from '../../components/customer/OutletCard';
 
 interface ConciergePageProps {
   onReservationCreated?: (res: ReservationRequest) => void;
@@ -54,10 +58,20 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
   const [input, setInput] = useState('');
   const [isReservationOpen, setIsReservationOpen] = useState(false);
   const [isLeadOpen, setIsLeadOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuOutlet, setMenuOutlet] = useState<Outlet>(selectedOutlet);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatTerminalRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToChat = () => {
+    if (!isEmbedded && chatTerminalRef.current) {
+      chatTerminalRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   };
 
   useEffect(() => {
@@ -103,130 +117,78 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
     }
   };
 
+  const handleCardSelect = (outlet: Outlet) => {
+    setSelectedOutlet(outlet);
+    scrollToChat();
+  };
+
+  const handleCardViewMenu = (outlet: Outlet) => {
+    setMenuOutlet(outlet);
+    setIsMenuOpen(true);
+  };
+
+  const handleCardBookTable = (outlet: Outlet) => {
+    setSelectedOutlet(outlet);
+    setIsReservationOpen(true);
+  };
+
   return (
-    <div className={`flex flex-col lg:flex-row ${isEmbedded ? 'h-full p-2' : 'h-[calc(100vh-4rem)] max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 gap-4'}`}>
-      {/* Left Sidebar: Outlet Selection & Luxury Destination Highlights */}
+    <div
+      className={
+        isEmbedded
+          ? 'h-full p-2 flex flex-col'
+          : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 animate-fade-in'
+      }
+    >
+      {/* SECTION 1: LUXURY SIGNATURE OUTLET CARDS GALLERY (Only in full customer view) */}
       {!isEmbedded && (
-        <div className="lg:w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">
-        {/* Brand Showcase Card */}
-        <div className="p-4 rounded-2xl glass-panel-elevated border border-gold-400/30">
-          <div className="flex items-center gap-2 text-gold-400 mb-1.5">
-            <Sparkles className="w-4 h-4" />
-            <span className="text-[11px] font-semibold tracking-widest uppercase">
-              Curated Dining
-            </span>
+        <section aria-labelledby="signature-destinations-heading" className="space-y-6">
+          {/* Header Section */}
+          <div className="text-center space-y-2.5 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gold-500/10 border border-gold-400/30 text-gold-400 text-xs font-semibold uppercase tracking-widest shadow-sm">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Curated Five-Star Gastronomy</span>
+            </div>
+            <h1
+              id="signature-destinations-heading"
+              className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gold-200 to-gold-400 tracking-tight"
+            >
+              Discover Our Signature Dining Destinations
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
+              Explore exceptional dining experiences, thoughtfully curated for every occasion.
+            </p>
           </div>
-          <h2 className="text-xl font-serif font-bold text-white leading-tight">
-            Amit Hospitality
-          </h2>
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-            Where culinary artistry meets architectural grandeur. Select a signature outlet below to converse with its dedicated AI concierge.
-          </p>
-        </div>
 
-        {/* Outlet Selector */}
-        <div className="space-y-2.5">
-          <label className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 px-1 flex items-center justify-between">
-            <span>Dining Destinations</span>
-            <span className="text-gold-400 font-mono text-[10px]">
-              {INITIAL_OUTLETS.length} Available
-            </span>
-          </label>
-
-          {INITIAL_OUTLETS.map((outlet) => {
-            const isSelected = selectedOutlet.id === outlet.id;
-            return (
-              <button
+          {/* 3-Column Responsive Grid: Desktop 3 / Tablet 2 / Mobile 1 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {INITIAL_OUTLETS.map((outlet) => (
+              <OutletCard
                 key={outlet.id}
-                onClick={() => setSelectedOutlet(outlet)}
-                className={`w-full text-left p-3.5 rounded-xl transition border relative group ${
-                  isSelected
-                    ? 'bg-charcoal-800/95 border-gold-400/70 shadow-gold-glow'
-                    : 'glass-panel border-slate-800/80 hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                {isSelected && (
-                  <span className="absolute left-0 top-3 bottom-3 w-1 bg-gradient-to-b from-gold-400 to-gold-600 rounded-r" />
-                )}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3
-                      className={`text-sm font-semibold tracking-wide ${
-                        isSelected ? 'text-gold-300' : 'text-slate-200 group-hover:text-white'
-                      }`}
-                    >
-                      {outlet.name}
-                    </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{outlet.outletType}</p>
-                  </div>
-                  {outlet.isPopular && (
-                    <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-gold-400/15 text-gold-400 border border-gold-400/30 shrink-0">
-                      Signature
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-2.5 pt-2 border-t border-slate-700/40 grid grid-cols-2 gap-1 text-[11px] text-slate-400">
-                  <div className="flex items-center gap-1 truncate">
-                    <Clock className="w-3 h-3 text-gold-400/80 shrink-0" />
-                    <span>{outlet.openingTime} - {outlet.closingTime}</span>
-                  </div>
-                  <div className="flex items-center gap-1 truncate">
-                    <MapPin className="w-3 h-3 text-gold-400/80 shrink-0" />
-                    <span className="truncate">{outlet.location.split(',')[0]}</span>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Action Fast-Track Shortcuts */}
-        <div className="p-3.5 rounded-xl glass-panel space-y-2 border border-slate-800">
-          <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
-            Direct Concierge Assistance
-          </p>
-          <button
-            onClick={() => setIsReservationOpen(true)}
-            className="w-full flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 hover:bg-charcoal-800 border border-slate-700/60 text-xs text-slate-200 transition"
-          >
-            <span className="flex items-center gap-2">
-              <Calendar className="w-3.5 h-3.5 text-gold-400" />
-              <span>Book Table at {selectedOutlet.name.split(' ')[0]}</span>
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-          <button
-            onClick={() => setIsLeadOpen(true)}
-            className="w-full flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 hover:bg-charcoal-800 border border-slate-700/60 text-xs text-slate-200 transition"
-          >
-            <span className="flex items-center gap-2">
-              <Utensils className="w-3.5 h-3.5 text-gold-400" />
-              <span>Private Dining & Parties</span>
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-          <button
-            onClick={requestHandover}
-            className="w-full flex items-center justify-between p-2 rounded-lg bg-charcoal-900/80 hover:bg-charcoal-800 border border-slate-700/60 text-xs text-slate-200 transition"
-          >
-            <span className="flex items-center gap-2">
-              <Headphones className="w-3.5 h-3.5 text-gold-400" />
-              <span>Connect with Human Host</span>
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-        </div>
-      </div>
+                outlet={outlet}
+                isSelected={selectedOutlet.id === outlet.id}
+                onSelect={handleCardSelect}
+                onViewMenu={handleCardViewMenu}
+                onBookTable={handleCardBookTable}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
-      {/* Center & Right: Luxury Conversational AI Concierge Terminal */}
-      <div className="flex-1 flex flex-col rounded-2xl glass-panel-elevated border border-gold-400/30 overflow-hidden shadow-luxury">
-        {/* Chat Header */}
-        <div className="px-4 sm:px-5 py-3 border-b border-slate-800/80 bg-charcoal-900/70 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-obsidian-950 shadow-gold-glow shrink-0">
-              <Sparkles className="w-4 h-4" />
+      {/* SECTION 2: LUXURY CONVERSATIONAL AI CONCIERGE TERMINAL */}
+      <section
+        ref={chatTerminalRef}
+        aria-label="AI Concierge Terminal"
+        className={`flex flex-col rounded-2xl glass-panel-elevated border border-gold-400/30 overflow-hidden shadow-luxury ${
+          isEmbedded ? 'h-full' : 'h-[620px] sm:h-[660px]'
+        }`}
+      >
+        {/* Chat Terminal Header */}
+        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-800/80 bg-charcoal-900/80 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-obsidian-950 shadow-gold-glow shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -237,7 +199,7 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
                       const found = INITIAL_OUTLETS.find((o) => o.id === Number(e.target.value));
                       if (found) setSelectedOutlet(found);
                     }}
-                    className="text-xs bg-charcoal-900 border border-gold-400/50 text-gold-300 rounded-lg px-2 py-0.5 font-serif font-bold focus:outline-none"
+                    className="text-xs bg-charcoal-900 border border-gold-400/50 text-gold-300 rounded-lg px-2.5 py-1 font-serif font-bold focus:outline-none"
                   >
                     {INITIAL_OUTLETS.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -246,23 +208,53 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
                     ))}
                   </select>
                 ) : (
-                  <h3 className="text-sm font-serif font-bold text-white tracking-wide">
-                    {selectedOutlet.name} Concierge
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm sm:text-base font-serif font-bold text-white tracking-wide">
+                      {selectedOutlet.name} Concierge
+                    </h2>
+                    <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-gold-500/10 text-gold-300 border border-gold-400/30">
+                      {selectedOutlet.outletType.split('&')[0]}
+                    </span>
+                  </div>
                 )}
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Online
                 </span>
               </div>
               <p className="text-[10px] text-slate-400">
-                {isDemo ? 'DEMO Mode (Sample Data)' : 'REAL Verified Knowledge'}
+                {isDemo ? 'DEMO Mode (Interactive Sample Knowledge)' : 'REAL Verified Knowledge Base'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Controls: Outlet Switcher Pill (compact), Language Selector, Reset */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {/* Quick Outlet Selector Chips for Desktop */}
+            {!isEmbedded && (
+              <div className="hidden lg:flex items-center rounded-xl bg-obsidian-900 border border-slate-800 p-0.5 text-xs">
+                {INITIAL_OUTLETS.map((o) => {
+                  const isCur = selectedOutlet.id === o.id;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setSelectedOutlet(o)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+                        isCur
+                          ? 'bg-gold-500/20 text-gold-300 font-bold border border-gold-400/40'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {o.name.split(' ')[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Multilingual Selector: EN / हिन्दी */}
-            <div className="flex items-center rounded-lg bg-charcoal-900 border border-slate-700/80 p-0.5 text-xs">
+            <div className="flex items-center rounded-lg bg-obsidian-900 border border-slate-700/80 p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => setLanguage('EN')}
@@ -289,10 +281,11 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
               </button>
             </div>
 
+            {/* Reset Button */}
             <button
               onClick={clearChat}
               title="Clear conversation and restart"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-charcoal-800 transition"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-charcoal-800 transition border border-transparent hover:border-slate-700"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Reset</span>
@@ -310,6 +303,42 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
           </div>
         </div>
 
+        {/* Action Fast-Track Shortcuts Bar */}
+        <div className="px-4 sm:px-6 py-2 bg-obsidian-950/60 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-thin text-xs shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mr-1 shrink-0 flex items-center gap-1">
+            <Compass className="w-3 h-3 text-gold-400" />
+            Fast-Track:
+          </span>
+          <button
+            onClick={() => handleCardViewMenu(selectedOutlet)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-900 hover:bg-charcoal-800 border border-slate-700 hover:border-gold-400/40 text-slate-200 hover:text-gold-300 transition shrink-0 whitespace-nowrap text-[11px]"
+          >
+            <Utensils className="w-3 h-3 text-gold-400" />
+            <span>View {selectedOutlet.name.split(' ')[0]} Menu</span>
+          </button>
+          <button
+            onClick={() => setIsReservationOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-900 hover:bg-charcoal-800 border border-slate-700 hover:border-gold-400/40 text-slate-200 hover:text-gold-300 transition shrink-0 whitespace-nowrap text-[11px]"
+          >
+            <Calendar className="w-3 h-3 text-gold-400" />
+            <span>Book Table</span>
+          </button>
+          <button
+            onClick={() => setIsLeadOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-900 hover:bg-charcoal-800 border border-slate-700 hover:border-gold-400/40 text-slate-200 hover:text-gold-300 transition shrink-0 whitespace-nowrap text-[11px]"
+          >
+            <Sparkles className="w-3 h-3 text-gold-400" />
+            <span>Private Dining & Parties</span>
+          </button>
+          <button
+            onClick={requestHandover}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-900 hover:bg-charcoal-800 border border-slate-700 hover:border-gold-400/40 text-slate-200 hover:text-gold-300 transition shrink-0 whitespace-nowrap text-[11px]"
+          >
+            <Headphones className="w-3 h-3 text-gold-400" />
+            <span>Connect with Human Host</span>
+          </button>
+        </div>
+
         {/* Messages Feed Viewport */}
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4">
           {messages.map((msg) => {
@@ -320,7 +349,7 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
               return (
                 <div
                   key={msg.id}
-                  className="p-3 rounded-xl bg-gold-500/10 border border-gold-400/30 text-gold-300 text-xs flex items-start gap-2.5 max-w-xl mx-auto shadow-sm"
+                  className="p-3.5 rounded-xl bg-gold-500/10 border border-gold-400/30 text-gold-300 text-xs flex items-start gap-2.5 max-w-xl mx-auto shadow-sm"
                 >
                   <Headphones className="w-4 h-4 text-gold-400 shrink-0 mt-0.5" />
                   <div className="space-y-1">
@@ -398,6 +427,7 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
                     <span className={isUser ? 'text-obsidian-900 font-medium' : 'text-slate-500'}>
                       {msg.timestamp}
                     </span>
+
                     {!isUser && (
                       <div className="flex items-center gap-2">
                         <button
@@ -453,7 +483,7 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 sm:p-4 border-t border-slate-800 bg-charcoal-900/80">
+        <div className="p-3 sm:p-4 border-t border-slate-800 bg-charcoal-900/90 shrink-0">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -461,7 +491,7 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isTyping}
-              placeholder={`Ask about ${selectedOutlet.name} menus, pricing, hours, or reservations...`}
+              placeholder={`Ask about ${selectedOutlet.name} menus, pricing, dress code, hours, or reservations...`}
               className="flex-1 px-4 py-2.5 rounded-xl bg-obsidian-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-gold-400 disabled:opacity-50 transition"
             />
             <button
@@ -478,11 +508,26 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
             <Info className="w-3 h-3 text-gold-400" />
             <span>
               Amit AI Concierge responses are grounded strictly in the active{' '}
-              <strong>{environment}</strong> knowledge environment.
+              <strong className="text-slate-300">{environment}</strong> verified hospitality knowledge.
             </span>
           </p>
         </div>
-      </div>
+      </section>
+
+      {/* Menu Preview Modal */}
+      <MenuModal
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        outlet={menuOutlet}
+        onBookTable={(outlet) => {
+          setSelectedOutlet(outlet);
+          setIsReservationOpen(true);
+        }}
+        onAskConcierge={(query) => {
+          handleSend(query);
+          scrollToChat();
+        }}
+      />
 
       {/* Reservation Request Modal */}
       <ReservationModal
