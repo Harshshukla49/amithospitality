@@ -175,7 +175,8 @@ def test_reservations_csv_export():
     try:
         resp = export_reservations_csv(environment="DEMO", db=db)
         content = resp.body.decode("utf-8")
-        assert "ID,Environment,Outlet,Guest Name" in content
+        assert "Reference ID" in content
+        assert "Guest Name" in content
         assert "Kavita Krishnan" in content
     finally:
         db.close()
@@ -233,7 +234,8 @@ def test_lead_lifecycle_and_export():
         # Export leads CSV
         resp = export_leads_csv(environment="DEMO", db=db)
         content = resp.body.decode("utf-8")
-        assert "ID,Environment,Outlet,Name,Phone" in content
+        assert "Reference ID" in content
+        assert "Customer Name" in content
         assert "Rahul Malhotra" in content
         assert "PROPOSAL_SENT" in content
     finally:

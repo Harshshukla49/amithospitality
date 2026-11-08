@@ -1,25 +1,31 @@
 import os
 import sys
+import io
+import asyncio
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from starlette.datastructures import MutableHeaders
 from app.database import Base
 from app.models.user import User
 from app.models.outlet import Outlet
-from app.models.audit import EnvironmentSetting
+from app.models.audit import EnvironmentSetting, AuditLog
+from app.models.lead import Lead
 from app.schemas.chat import ChatMessageRequest
-from app.routers.chat import handle_chat_message
+from app.routers.chat import handle_chat_message, request_handover
+from app.schemas.auth import RefreshTokenRequest
+from app.routers.auth import refresh_token_endpoint
+from app.routers.knowledge import upload_document
+from app.utils.security import create_access_token, create_refresh_token, require_roles
 from app.utils.security_middleware import (
     sanitize_input_text,
     detect_prompt_injection,
     global_rate_limiter,
 )
-from app.utils.security import require_roles
 
 def setup_test_db():
     engine = create_engine("sqlite:///:memory:", echo=False)
@@ -160,6 +166,96 @@ def test_phase8_security():
     passed_user = admin_checker(current_user=admin_user)
     assert passed_user.email == "gm@amithospitality.com"
     print("  [OK] RBAC check granted access to SUPER_ADMIN.")
+
+    # 7. Test JWT Refresh Token Flow & Security Validation
+    db.add(admin_user)
+    db.commit()
+
+    valid_refresh = create_refresh_token(data={"sub": admin_user.email})
+    ref_req = RefreshTokenRequest(refresh_token=valid_refresh)
+    token_resp = refresh_token_endpoint(req=ref_req, db=db)
+    assert token_resp.access_token is not None
+    assert token_resp.refresh_token is not None
+    assert token_resp.email == admin_user.email
+    print("  [OK] Valid refresh token successfully issued new access and refresh tokens.")
+
+    # Reject invalid token
+    try:
+        refresh_token_endpoint(req=RefreshTokenRequest(refresh_token="invalid.garbage.token"), db=db)
+        assert False, "Should fail on invalid refresh token"
+    except HTTPException as e:
+        assert e.status_code == 401
+        print("  [OK] Invalid refresh token correctly rejected with 401 Unauthorized.")
+
+    # Reject access token passed as refresh token (type mismatch)
+    access_token_as_refresh = create_access_token(data={"sub": admin_user.email, "role": admin_user.role})
+    try:
+        refresh_token_endpoint(req=RefreshTokenRequest(refresh_token=access_token_as_refresh), db=db)
+        assert False, "Should fail on wrong token type"
+    except HTTPException as e:
+        assert e.status_code == 401
+        assert "Expected refresh token" in e.detail
+        print("  [OK] Access token rejected when passed to refresh endpoint (type enforcement).")
+
+    # 8. Test File Upload Security (Disallowed Extensions & Path Traversal)
+    # 8a. Disallowed extension
+    bad_upload = UploadFile(file=io.BytesIO(b"MZ\x90\x00executable content"), filename="malicious_script.exe")
+    try:
+        upload_document(
+            file=bad_upload,
+            environment="REAL",
+            outlet_id=outlet1.id,
+            category="POLICY",
+            current_user=admin_user,
+            db=db,
+        )
+        assert False, "Should reject .exe upload"
+    except HTTPException as e:
+        assert e.status_code == 400
+        assert "Unsupported file format" in e.detail
+        print("  [OK] Upload security rejected dangerous file extension (.exe) with 400 Bad Request.")
+
+    # 8b. Oversized file (>20MB)
+    huge_bytes = b"0" * (20 * 1024 * 1024 + 1024)  # 20MB + 1KB
+    huge_upload = UploadFile(file=io.BytesIO(huge_bytes), filename="huge_overflow.txt")
+    try:
+        upload_document(
+            file=huge_upload,
+            environment="REAL",
+            outlet_id=outlet1.id,
+            category="POLICY",
+            current_user=admin_user,
+            db=db,
+        )
+        assert False, "Should reject oversized upload"
+    except HTTPException as e:
+        assert e.status_code == 413
+        assert "exceeds maximum permitted size" in e.detail
+        print("  [OK] Upload security rejected oversized file (>20MB) with 413 Request Entity Too Large.")
+
+    # 9. Test Human Handover Audit Trail & Callback Lead Integration
+    handover_res = request_handover(
+        outlet_id=outlet1.id,
+        session_id="sec_sess_handover_1",
+        guest_name="Mrs. Sunita Kapoor",
+        guest_phone="+91 98111 22233",
+        db=db,
+    )
+    assert handover_res["success"] is True
+
+    # Verify audit log was created
+    handover_audit = db.query(AuditLog).filter(AuditLog.action == "HUMAN_HANDOVER_REQUESTED").first()
+    assert handover_audit is not None
+    assert "Mrs. Sunita Kapoor" in handover_audit.user_name
+    assert "Amber Terrace Rooftop" in handover_audit.details
+
+    # Verify callback lead was created
+    handover_lead = db.query(Lead).filter(Lead.enquiry_type == "CUSTOMER_CALLBACK").first()
+    assert handover_lead is not None
+    assert handover_lead.name == "Mrs. Sunita Kapoor"
+    assert handover_lead.phone == "+91 98111 22233"
+    assert handover_lead.source == "AI_CONCIERGE_HANDOVER"
+    print("  [OK] Human handover logged immutable AuditLog entry and created priority callback Lead.")
 
     print("\n--- PHASE 8: ALL TESTS PASSED SUCCESSFULLY! ---\n")
 

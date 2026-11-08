@@ -1,6 +1,7 @@
 import time
 import re
 import html
+import uuid
 from typing import Dict, List, Tuple
 from starlette.datastructures import MutableHeaders
 from starlette.responses import JSONResponse
@@ -44,8 +45,8 @@ def sanitize_input_text(text: str) -> str:
 
 class SecurityHeadersMiddleware:
     """
-    Pure ASGI middleware injecting enterprise security headers.
-    Protects against MIME-sniffing, XSS, and unauthorized clickjacking.
+    Pure ASGI middleware injecting enterprise security headers and request correlation IDs.
+    Protects against MIME-sniffing, XSS, unauthorized clickjacking, and facilitates distributed tracing.
     """
     def __init__(self, app):
         self.app = app
@@ -55,12 +56,29 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Extract or generate unique correlation Request ID
+        request_id = None
+        for h_name, h_val in scope.get("headers", []):
+            if h_name.lower() == b"x-request-id":
+                request_id = h_val.decode("latin1").strip()
+                break
+        if not request_id:
+            request_id = f"req_{uuid.uuid4().hex[:16]}"
+
+        if "state" not in scope:
+            scope["state"] = {}
+        scope["state"]["request_id"] = request_id
+
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
+                headers["X-Request-ID"] = request_id
                 headers["X-Content-Type-Options"] = "nosniff"
+                headers["X-Frame-Options"] = "SAMEORIGIN"
                 headers["X-XSS-Protection"] = "1; mode=block"
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
                 headers["Content-Security-Policy"] = (
                     "frame-ancestors 'self' https://amithospitality.com https://*.amithospitality.com "
                     "http://localhost:* http://127.0.0.1:*;"
@@ -72,35 +90,24 @@ class SecurityHeadersMiddleware:
 
 # --- 3. IN-MEMORY RATE LIMITING ASGI MIDDLEWARE ---
 
+from app.services.redis_service import redis_service
+
 class RateLimiter:
     """
-    Sliding window in-memory rate limiter per IP address.
+    Sliding window rate limiter per IP address.
+    Backing store powered by Redis distributed sorted sets with automatic local in-memory fallback.
     """
     def __init__(self, max_requests: int = 60, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests: Dict[str, List[float]] = {}
 
     def is_allowed(self, client_ip: str, limit: int = None) -> Tuple[bool, int]:
         max_allowed = limit or self.max_requests
-        now = time.time()
-        cutoff = now - self.window_seconds
-
-        client_timestamps = self.requests.get(client_ip, [])
-        client_timestamps = [ts for ts in client_timestamps if ts > cutoff]
-
-        if len(client_timestamps) >= max_allowed:
-            self.requests[client_ip] = client_timestamps
-            retry_after = int(self.window_seconds - (now - client_timestamps[0])) + 1
-            return False, max(1, retry_after)
-
-        client_timestamps.append(now)
-        self.requests[client_ip] = client_timestamps
-        return True, 0
+        return redis_service.check_rate_limit(client_ip, limit=max_allowed, window_seconds=self.window_seconds)
 
     def reset(self):
         """Reset rate limiter state (useful for tests)."""
-        self.requests.clear()
+        redis_service.reset_limits()
 
 global_rate_limiter = RateLimiter(max_requests=80, window_seconds=60)
 

@@ -12,6 +12,7 @@ from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.schemas.chat import ChatMessageResponse, CitationItem
 from app.services.intent_service import detect_intent
 from app.services.embedding_service import search_relevant_chunks
+from app.services.gemini_service import gemini_service
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ def build_deterministic_concierge_response(
                 f"[REAL MODE — VERIFIED INFORMATION REQUIRED]\n\n"
                 f"**{outlet.name}** ke liye is vishay par abhi company dwara verified documents uplabdh nahi hain.\n\n"
                 f"Amit Hospitality ke official standards ke anusaar hum unverified jaankari pradan nahi karte. "
-                f"Kripya hamari Guest Relations team se seedhe sampark karein: **guestrelations@amithospitality.com** ya **+91 11 4050 9900**."
+                f"Kripya hamari Guest Relations team se seedhe sampark karein: **{settings.HOTLINE_EMAIL}** ya **{settings.HOTLINE_PHONE_NUMBER}**."
             )
             return {
                 "reply": reply,
@@ -111,7 +112,7 @@ def build_deterministic_concierge_response(
                 f"[REAL MODE — VERIFIED INFORMATION REQUIRED]\n\n"
                 f"I do not currently have verified corporate documentation indexed regarding this specific inquiry for **{outlet.name}**.\n\n"
                 f"To maintain strict operational authenticity, our AI Concierge does not present unverified information. "
-                f"Please allow our Guest Relations team to assist you directly at **guestrelations@amithospitality.com** or **+91 11 4050 9900**."
+                f"Please allow our Guest Relations team to assist you directly at **{settings.HOTLINE_EMAIL}** or **{settings.HOTLINE_PHONE_NUMBER}**."
             )
             return {
                 "reply": reply,
@@ -125,14 +126,14 @@ def build_deterministic_concierge_response(
             reply = (
                 f"Mujhe aapko **{outlet.name}** ke Guest Relations Desk se connect karne me khushi hogi.\n\n"
                 f"Hamare duty manager ko priority notification bhej diya gaya hai. "
-                f"Turant sahayata ke liye aap hamari concierge hotline par call kar sakte hain: **+91 11 4050 9900** ya email karein **concierge@amithospitality.com**."
+                f"Turant sahayata ke liye aap hamari concierge hotline par call kar sakte hain: **{settings.HOTLINE_PHONE_NUMBER}** ya email karein **{settings.HOTLINE_EMAIL}**."
             )
             suggested_actions = ["Concierge Desk par call karein", "Aaj ki table availability check karein"]
         else:
             reply = (
                 f"I am pleased to connect you directly with our Guest Relations Desk at **{outlet.name}**.\n\n"
                 f"A priority notification has been routed to our duty manager. "
-                f"For immediate concierge assistance, you may also call our concierge hotline directly at **+91 11 4050 9900** or email **concierge@amithospitality.com**."
+                f"For immediate concierge assistance, you may also call our concierge hotline directly at **{settings.HOTLINE_PHONE_NUMBER}** or email **{settings.HOTLINE_EMAIL}**."
             )
             suggested_actions = ["Call Concierge Desk", "Check today's table availability"]
         return {"reply": reply, "citations": citations, "suggested_actions": suggested_actions}
@@ -293,54 +294,66 @@ def build_deterministic_concierge_response(
         time_text = f" at {entities.get('time')}" if entities.get("time") else ""
         if is_hindi:
             reply = (
-                f"**{outlet.name}** me table reservation ke liye main aapki puri sahayata karunga.\n\n"
-                f"Booking confirm karne ke liye kripya yeh batayein:\n"
-                f"1. Aane ki taareekh (Date)\n"
-                f"2. Seating preference (Indoor, Al Fresco Terrace, ya Private Dining)\n"
-                f"3. Koi special celebration ya dietary requirements\n\n"
-                f"Aap seedhe **'Reserve a Table'** button par click karke bhi reservation form bhar sakte hain."
+                f"**{outlet.name}** me table reservation request darj karne ke liye main aapki sahayata karta hoon.\n\n"
+                f"Reservation request submit karne ke liye yeh jankari aavashyak hai:\n"
+                f"• **Guest Name:** Aapka poora naam\n"
+                f"• **Contact:** Phone number (7–15 digits) aur optional email\n"
+                f"• **Date & Time:** Aane ki taareekh aur samay\n"
+                f"• **Party Size:** Mehmano ki sankhya{guest_count_text}\n"
+                f"• **Seating Preference:** Indoor, Al Fresco Terrace, ya Private Dining\n\n"
+                f"*Kripya dhyan dein:* Request darj hone par aapko ek unique **Reference ID (REF-RES-...)** pradan ki jayegi. Hamare maître d' table review karne ke baad hi booking confirm karenge; request submit hona automatic table confirmation nahi hai.\n\n"
+                f"Aap **'Reserve a Table'** button par click karke form turant submit kar sakte hain."
             )
             if environment == "DEMO":
-                reply += "\n\n*[DEMO DATA — DEMO mode me reservation requests simulate ki jaati hain]*"
-            suggested_actions = ["Open Reservation Drawer", "Seating options dekhein", "Check tonight's availability"]
+                reply += "\n\n*[DEMO DATA — DEMO mode me reservation requests simulate ki jaati hain aur 'DEMO DATA' mark hoti hain]*"
+            suggested_actions = ["Reserve a Table", "Seating options dekhein", "Check tonight's availability"]
         else:
             reply = (
-                f"It will be my pleasure to assist with your table reservation at **{outlet.name}**{guest_count_text}{time_text}.\n\n"
-                f"To confirm your reservation, please specify:\n"
-                f"1. Date of your visit\n"
-                f"2. Preferred seating (Indoor, Al Fresco Terrace, or Private Dining)\n"
-                f"3. Any anniversary, celebration, or dietary preferences\n\n"
-                f"You can also click **'Reserve a Table'** to open the interactive booking drawer."
+                f"It will be my pleasure to assist with your table reservation request at **{outlet.name}**{guest_count_text}{time_text}.\n\n"
+                f"To submit a reservation request, our maître d' requires:\n"
+                f"• **Guest Name:** Full name\n"
+                f"• **Contact:** Phone number (7–15 digits) and optional email\n"
+                f"• **Date & Time:** Preferred date and reservation time\n"
+                f"• **Party Size:** Number of guests\n"
+                f"• **Seating Preference:** Indoor, Al Fresco Terrace, or Private Dining\n\n"
+                f"*Please note:* Upon submission, you will receive a unique **Reference ID (REF-RES-...)**. All submissions are reservation requests awaiting host verification and allocation; this is not an automated table confirmation.\n\n"
+                f"You may click **'Reserve a Table'** to open the reservation request form."
             )
             if environment == "DEMO":
-                reply += "\n\n*[DEMO DATA — Reservation requests in DEMO mode are simulated]*"
-            suggested_actions = ["Open Reservation Drawer", "View seating options", "Check tonight's availability"]
+                reply += "\n\n*[DEMO DATA — Reservation requests in DEMO mode are marked as simulated demo records]*"
+            suggested_actions = ["Reserve a Table", "View seating options", "Check tonight's availability"]
         return {"reply": reply, "citations": citations, "suggested_actions": suggested_actions}
 
     # --- 6. EVENT & PRIVATE DINING INQUIRY ---
     if intent == "EVENT_INQUIRY":
         if is_hindi:
             reply = (
-                f"**{outlet.name}** private events, executive board dinners aur celebrations ke liye behtareen venue hai.\n\n"
-                f"• **Venue Capacity:** Up to {outlet.seating_capacity} guests ke liye curated configurations.\n"
-                f"• **Bespoke Menus:** Multi-course tasting menus aur fine beverage pairings.\n"
-                f"• **Dedicated Host:** Hamare senior banquets manager aapke pure event ko coordinate karenge.\n\n"
-                f"Kya aap hamare Events Director se customized proposal chahenge?"
+                f"**{outlet.name}** private events, birthday parties, corporate dinners aur landmark celebrations ke liye curated venue hai.\n\n"
+                f"Hamari banquets team se customized proposal aur date booking ke liye yeh jankari zaroori hai:\n"
+                f"• **Enquiry Type:** Private party, Corporate event, Birthday, Wedding, ya Group booking\n"
+                f"• **Date & Size:** Target date aur anumanit mehmano ki sankhya (Up to {outlet.seating_capacity})\n"
+                f"• **Contact Details:** Aapka naam, phone number aur official email\n"
+                f"• **Requirements:** Custom menu, AV audio-visual, decor ya special vision\n\n"
+                f"Inquiry submit karte hi aapko ek unique **Reference ID (REF-LEAD-...)** mil jayegi aur hamare Events Director aapse sampark karenge.\n\n"
+                f"Aap **'Submit Event Inquiry'** button click karke proposal request bhej sakte hain."
             )
             if environment == "DEMO":
-                reply += "\n\n*[DEMO DATA — Sample event specifications]*"
-            suggested_actions = ["Submit Private Event Lead", "Contact Events Director", "View cocktail packages"]
+                reply += "\n\n*[DEMO DATA — Event lead submissions in DEMO mode are simulated]*"
+            suggested_actions = ["Submit Event Inquiry", "Contact Events Director", "View banquet packages"]
         else:
             reply = (
-                f"**{outlet.name}** provides exclusive settings for intimate gatherings, executive board dinners, and landmark celebrations.\n\n"
-                f"• **Venue Capacity:** Accommodates up to {outlet.seating_capacity} guests in curated configurations.\n"
-                f"• **Bespoke Menus:** Multi-course tasting menus paired with sommelier-selected vintages.\n"
-                f"• **Dedicated Host:** A senior banquets manager coordinates your entire event timeline.\n\n"
-                f"Would you like our Events Director to prepare a bespoke proposal?"
+                f"**{outlet.name}** provides distinguished settings for intimate private parties, executive corporate events, and wedding celebrations.\n\n"
+                f"To initiate a bespoke event proposal, our Events Director requires:\n"
+                f"• **Enquiry Type:** Private party, Corporate event, Birthday celebration, Wedding, or Group booking\n"
+                f"• **Schedule & Scale:** Preferred date and estimated guest count (Up to {outlet.seating_capacity})\n"
+                f"• **Contact Details:** Name, direct phone number, and email address\n"
+                f"• **Vision:** Course preferences, AV setup, or entertainment requirements\n\n"
+                f"Upon submission, you will be assigned a unique **Reference ID (REF-LEAD-...)** for direct follow-up with our banquets team.\n\n"
+                f"Click **'Submit Event Inquiry'** to provide your specifications."
             )
             if environment == "DEMO":
-                reply += "\n\n*[DEMO DATA — Sample event specifications]*"
-            suggested_actions = ["Submit Private Event Lead", "Contact Events Director", "View cocktail packages"]
+                reply += "\n\n*[DEMO DATA — Event lead inquiries in DEMO mode are marked as simulated demo records]*"
+            suggested_actions = ["Submit Event Inquiry", "Contact Events Director", "View banquet packages"]
         return {"reply": reply, "citations": citations, "suggested_actions": suggested_actions}
 
     # --- 7. DIETARY INQUIRY ---
@@ -458,12 +471,15 @@ def generate_rag_chat_response(
         .all()
     )
 
-    # 4. Attempt Gemini LLM Generation if API key is provided
+    # 4. Attempt Gemini LLM Generation if API key is provided and conditions met
     reply_text = None
     citations: List[CitationItem] = []
     suggested_actions: List[str] = []
 
-    if settings.GEMINI_API_KEY and active_env != "REAL":
+    # In REAL mode, only call Gemini if verified chunks or verified menu items exist; otherwise enforce zero-hallucination guard
+    can_call_gemini = gemini_service.is_configured and (active_env == "DEMO" or bool(retrieved_chunks or menu_items))
+
+    if can_call_gemini:
         # Prepare context blocks
         context_str = ""
         if retrieved_chunks:
@@ -490,9 +506,13 @@ Detected Intent: {intent}
 
 Respond as the luxury Amit Hospitality AI Concierge following the system instructions."""
 
-        llm_reply = call_gemini_api(prompt, SYSTEM_PROMPT, settings.GEMINI_API_KEY)
-        if llm_reply:
-            reply_text = llm_reply
+        llm_result = gemini_service.generate_grounded_response(
+            prompt=prompt,
+            system_instruction=SYSTEM_PROMPT,
+            environment=active_env,
+        )
+        if llm_result and llm_result.get("reply"):
+            reply_text = llm_result["reply"]
             for c in retrieved_chunks[:2]:
                 citations.append(CitationItem(
                     document_title=c["document_title"],

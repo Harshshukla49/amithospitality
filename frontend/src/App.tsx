@@ -5,6 +5,7 @@ import { ChatProvider } from './context/ChatContext';
 import { Header } from './components/common/Header';
 import { DemoBanner } from './components/common/DemoBanner';
 import { SwitchEnvironmentModal } from './components/common/SwitchEnvironmentModal';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Sidebar, AdminTab } from './components/admin/Sidebar';
 import { ConciergePage } from './pages/customer/ConciergePage';
 import { DashboardPage } from './pages/admin/DashboardPage';
@@ -13,6 +14,7 @@ import { OutletsPage } from './pages/admin/OutletsPage';
 import { ReservationsPage } from './pages/admin/ReservationsPage';
 import { LeadsPage } from './pages/admin/LeadsPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
+import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import {
   INITIAL_RESERVATIONS,
@@ -57,12 +59,26 @@ const MainLayout: React.FC = () => {
     setReservations((prev) => [res, ...prev]);
   };
 
-  const handleUpdateReservationStatus = async (id: number, status: ReservationStatus, notes?: string) => {
+  const handleUpdateReservationStatus = async (
+    id: number,
+    status: ReservationStatus,
+    notes?: string,
+    assignedStaffName?: string
+  ) => {
     setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status, internalNotes: notes || r.internalNotes } : r))
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status,
+              internalNotes: notes || r.internalNotes,
+              assignedStaffName: assignedStaffName || r.assignedStaffName,
+            }
+          : r
+      )
     );
     try {
-      await updateReservationStatusApi(id, status, notes);
+      await updateReservationStatusApi(id, status, notes, assignedStaffName);
     } catch (e) {
       console.warn('Backend status update error:', e);
     }
@@ -72,12 +88,27 @@ const MainLayout: React.FC = () => {
     setLeads((prev) => [lead, ...prev]);
   };
 
-  const handleUpdateLeadStatus = async (id: number, status: LeadStatus, notes?: string) => {
+  const handleUpdateLeadStatus = async (
+    id: number,
+    status: LeadStatus,
+    notes?: string,
+    assignedStaffName?: string
+  ) => {
     setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status, notes: notes || l.notes } : l))
+      prev.map((l) =>
+        l.id === id
+          ? {
+              ...l,
+              status,
+              notes: notes || l.notes,
+              internalNotes: notes || l.internalNotes,
+              assignedStaffName: assignedStaffName || l.assignedStaffName,
+            }
+          : l
+      )
     );
     try {
-      await updateLeadStatusApi(id, status, notes);
+      await updateLeadStatusApi(id, status, notes, assignedStaffName);
     } catch (e) {
       console.warn('Backend lead status update error:', e);
     }
@@ -149,9 +180,14 @@ const MainLayout: React.FC = () => {
                 />
               )}
               {adminTab === 'LEADS' && (
-                <LeadsPage leads={leads} onUpdateStatus={handleUpdateLeadStatus} />
+                <LeadsPage
+                  leads={leads}
+                  onUpdateStatus={handleUpdateLeadStatus}
+                  onAddLead={handleAddLead}
+                />
               )}
               {adminTab === 'ANALYTICS' && <AnalyticsPage />}
+              {adminTab === 'INTEGRATIONS' && <IntegrationsPage />}
               {adminTab === 'SETTINGS' && <SettingsPage />}
             </div>
           </main>
@@ -166,13 +202,15 @@ const MainLayout: React.FC = () => {
 
 export function App() {
   return (
-    <AuthProvider>
-      <EnvironmentProvider>
-        <ChatProvider>
-          <MainLayout />
-        </ChatProvider>
-      </EnvironmentProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <EnvironmentProvider>
+          <ChatProvider>
+            <MainLayout />
+          </ChatProvider>
+        </EnvironmentProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

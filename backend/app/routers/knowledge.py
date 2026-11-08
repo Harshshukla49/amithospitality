@@ -6,6 +6,10 @@ from datetime import datetime
 import os
 import shutil
 import json
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
@@ -147,8 +151,11 @@ def get_document_detail(
         ],
     )
 
+ALLOWED_EXTENSIONS = {"PDF", "DOCX", "XLSX", "CSV", "TXT"}
+MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
+
 @router.post("/upload", response_model=KnowledgeDocResponse)
-async def upload_document(
+def upload_document(
     file: UploadFile = File(...),
     environment: str = Form("REAL"),
     outlet_id: Optional[int] = Form(None),
@@ -158,41 +165,74 @@ async def upload_document(
 ):
     """
     Upload real verified document (PDF, DOCX, XLSX, CSV, TXT).
-    Processes text, creates semantic chunks, generates vectors, and indexes into store.
+    Validates file extension, limits file size to 20MB, prevents directory traversal,
+    processes text, creates semantic chunks, generates vectors, and indexes into store.
     """
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
+
+    # Validate extension
+    ext = file.filename.rsplit(".", 1)[-1].upper() if "." in file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format '.{ext.lower()}'. Only verified PDF, DOCX, XLSX, CSV, and TXT documents are permitted.",
+        )
+
+    # Sanitize filename against directory traversal
+    base_name = os.path.basename(file.filename)
+    sanitized_name = re.sub(r"[^\w\.-]", "_", base_name)
     timestamp_prefix = int(datetime.utcnow().timestamp())
-    safe_filename = f"{timestamp_prefix}_{file.filename}"
+    safe_filename = f"{timestamp_prefix}_{sanitized_name}"
+
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    file_size = os.path.getsize(file_path)
-    ext = file.filename.split(".")[-1].upper() if "." in file.filename else "TXT"
+        file_size = os.path.getsize(file_path)
+        if file_size > MAX_UPLOAD_SIZE_BYTES:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded file exceeds maximum permitted size of 20 MB (received {file_size / (1024*1024):.1f} MB).",
+            )
 
-    # Extract structured sections
-    sections = extract_document_content(file_path, ext)
-    
-    # Semantic chunking
-    chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
-    if not chunks_data:
-        chunks_data = [{
-            "chunk_index": 0,
-            "title": file.filename,
-            "page_number": 1,
-            "content": f"Document: {file.filename} (Processed empty document)",
-            "word_count": 5
-        }]
+        # Extract structured sections
+        sections = extract_document_content(file_path, ext)
+        
+        # Semantic chunking
+        chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
+        if not chunks_data:
+            chunks_data = [{
+                "chunk_index": 0,
+                "title": sanitized_name,
+                "page_number": 1,
+                "content": f"Document: {sanitized_name} (Processed empty document)",
+                "word_count": 5
+            }]
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.error(f"Failed to parse document {sanitized_name}: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to process and index document content: {str(e)}",
+        )
 
     # Create document record
-    clean_title = file.filename.replace("_", " ").rsplit(".", 1)[0]
+    clean_title = sanitized_name.replace("_", " ").rsplit(".", 1)[0]
     new_doc = KnowledgeDocument(
         environment=environment,
         outlet_id=outlet_id,
         title=clean_title,
-        file_name=file.filename,
-        file_type=ext if ext in ["PDF", "DOCX", "XLSX", "CSV", "TXT"] else "TXT",
+        file_name=sanitized_name,
+        file_type=ext,
         file_path=file_path,
         file_size_bytes=file_size,
         mime_type=file.content_type,

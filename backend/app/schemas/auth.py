@@ -36,3 +36,7 @@ class UserResponse(BaseModel):
 class PasswordResetRequest(BaseModel):
     email: EmailStr
     new_password: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+

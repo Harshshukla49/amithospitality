@@ -11,9 +11,14 @@ TEST_SUITES = [
     ("Phase 3 — Knowledge Base Management & Document Pipeline", "test_phase3_knowledge.py"),
     ("Phase 4 — AI Chatbot, Intent Detection & Grounded RAG", "test_phase4_rag.py"),
     ("Phase 5 — Reservation & Lead Management Workflows", "test_phase5_workflows.py"),
+    ("Phase 5 — Comprehensive Reservation & Lead Pipeline", "test_phase5_comprehensive.py"),
     ("Phase 6 — Analytics, BI Reporting & Audit Trail Compliance", "test_phase6_analytics.py"),
     ("Phase 7 — Multi-Outlet & Multilingual Concierge", "test_phase7_multilingual.py"),
     ("Phase 8 — Security Hardening, Prompt Injection & Rate Limiting", "test_phase8_security.py"),
+    ("Phase 9 — Production Infrastructure & Database Migration", "test_phase9_postgres_migration.py"),
+    ("Phase 10 — Real AI, WhatsApp, Voice, Email & Enterprise Integrations", "test_phase10_integrations.py"),
+    ("Phase 11 — Enterprise QA, Security Validation & Reliability", "test_phase11_enterprise_qa.py"),
+    ("Phase 12 — Cloud Deployment, Infrastructure & Production Smoke", "test_phase12_deployment_smoke.py"),
 ]
 
 def run_master_regression_suite():

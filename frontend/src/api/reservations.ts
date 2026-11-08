@@ -1,5 +1,5 @@
 import { apiRequest } from './client';
-import { ReservationRequest, ReservationStatus } from '../types';
+import { ReservationRequest, ReservationStatus, ReservationHistoryItem } from '../types';
 
 export interface CreateReservationPayload {
   outlet_id: number;
@@ -11,10 +11,13 @@ export interface CreateReservationPayload {
   reservation_time: string;
   seating_preference: string;
   special_requests?: string;
+  conversation_id?: number;
+  session_id?: string;
 }
 
 export interface BackendReservation {
   id: number;
+  reference_id?: string;
   environment: 'DEMO' | 'REAL';
   outlet_id: number;
   outlet_name: string;
@@ -29,6 +32,9 @@ export interface BackendReservation {
   status: ReservationStatus;
   internal_notes?: string;
   assigned_staff_id?: number;
+  assigned_staff_name?: string;
+  conversation_id?: number;
+  session_id?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -36,6 +42,7 @@ export interface BackendReservation {
 export function mapBackendReservation(r: BackendReservation): ReservationRequest {
   return {
     id: r.id,
+    referenceId: r.reference_id,
     environment: r.environment,
     outletId: r.outlet_id,
     outletName: r.outlet_name,
@@ -49,6 +56,9 @@ export function mapBackendReservation(r: BackendReservation): ReservationRequest
     specialRequests: r.special_requests,
     status: r.status,
     internalNotes: r.internal_notes,
+    assignedStaffName: r.assigned_staff_name,
+    conversationId: r.conversation_id,
+    sessionId: r.session_id,
     createdAt: r.created_at,
   };
 }
@@ -64,11 +74,15 @@ export async function createReservationApi(data: CreateReservationPayload): Prom
 export async function fetchReservationsApi(params?: {
   outlet_id?: number;
   status?: string;
+  reservation_date?: string;
+  search?: string;
   environment?: string;
 }): Promise<ReservationRequest[]> {
   const queryParts: string[] = [];
   if (params?.outlet_id) queryParts.push(`outlet_id=${params.outlet_id}`);
   if (params?.status && params.status !== 'ALL') queryParts.push(`status=${params.status}`);
+  if (params?.reservation_date) queryParts.push(`reservation_date=${encodeURIComponent(params.reservation_date)}`);
+  if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
   if (params?.environment) queryParts.push(`environment=${params.environment}`);
 
   const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
@@ -79,13 +93,39 @@ export async function fetchReservationsApi(params?: {
 export async function updateReservationStatusApi(
   id: number,
   status: ReservationStatus,
-  internalNotes?: string
+  internalNotes?: string,
+  assignedStaffName?: string
 ): Promise<ReservationRequest> {
   const res = await apiRequest<BackendReservation>(`/reservations/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status, internal_notes: internalNotes }),
+    body: JSON.stringify({
+      status,
+      internal_notes: internalNotes,
+      assigned_staff_name: assignedStaffName,
+    }),
   });
   return mapBackendReservation(res);
+}
+
+export async function fetchReservationHistoryApi(id: number): Promise<ReservationHistoryItem[]> {
+  const res = await apiRequest<Array<{
+    id: number;
+    reservation_id: number;
+    previous_status: string | null;
+    new_status: string;
+    changed_by_name: string;
+    notes?: string;
+    created_at: string;
+  }>>(`/reservations/${id}/history`);
+  return res.map((item) => ({
+    id: item.id,
+    reservationId: item.reservation_id,
+    previousStatus: item.previous_status,
+    newStatus: item.new_status,
+    changedByName: item.changed_by_name,
+    notes: item.notes,
+    createdAt: item.created_at,
+  }));
 }
 
 export async function exportReservationsCsv(environment?: string): Promise<Blob> {

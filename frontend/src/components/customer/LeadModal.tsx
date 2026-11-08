@@ -30,6 +30,8 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   });
   const [budgetRange, setBudgetRange] = useState('₹1,50,000 - ₹3,00,000');
   const [notes, setNotes] = useState('');
+  const [submittedRefId, setSubmittedRefId] = useState('');
+  const [error, setError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -37,39 +39,57 @@ export const LeadModal: React.FC<LeadModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!name.trim()) {
+      setError('Please provide your name.');
+      return;
+    }
+    if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+      setError('Please enter a valid contact phone number (7 to 15 digits).');
+      return;
+    }
+
     setIsSubmitting(true);
+    setError('');
 
     try {
       const saved = await createLeadApi({
         outlet_id: outlet.id,
-        name,
-        phone,
-        email,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
         enquiry_type: enquiryType,
         guest_count: guestCount,
         target_date: targetDate,
         budget_range: budgetRange,
-        notes: notes || undefined,
+        notes: notes.trim() || undefined,
+        source: 'AI_CONCIERGE_WEB',
       });
 
+      const refId = saved.referenceId || `REF-LEAD-${targetDate.replace(/-/g, '')}-${saved.id}`;
+      setSubmittedRefId(refId);
       onSuccess(saved);
       setIsSubmitted(true);
     } catch (err: any) {
       console.warn('Backend lead error, using fallback:', err);
+      const generatedRef = `REF-LEAD-${targetDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      setSubmittedRefId(generatedRef);
       const fallback: Lead = {
         id: Date.now(),
+        referenceId: generatedRef,
         environment,
         outletId: outlet.id,
         outletName: outlet.name,
-        name,
-        phone,
-        email,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
         enquiryType,
         guestCount,
         targetDate,
         budgetRange,
         status: 'NEW',
-        notes,
+        notes: notes.trim(),
+        source: 'AI_CONCIERGE_WEB',
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
       };
       onSuccess(fallback);
@@ -107,6 +127,20 @@ export const LeadModal: React.FC<LeadModalProps> = ({
                 From high-level corporate galas to milestone anniversaries, our banquets team curates exquisite culinary experiences.
               </p>
             </div>
+
+            {isDemo && (
+              <div className="p-3 mb-4 rounded-xl bg-amber-500/15 border border-gold-400/30 text-gold-300 text-xs flex items-center gap-2">
+                <span>
+                  <strong>DEMO SIMULATION:</strong> This event inquiry will be marked as DEMO DATA in the Admin Portal.
+                </span>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-2 mb-3 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -161,10 +195,14 @@ export const LeadModal: React.FC<LeadModalProps> = ({
                     onChange={(e) => setEnquiryType(e.target.value as LeadType)}
                     className="w-full px-2 py-2 rounded-lg bg-charcoal-900 border border-slate-700 text-white focus:outline-none focus:border-gold-400"
                   >
+                    <option value="CORPORATE_EVENT">Corporate Event / Dinner</option>
+                    <option value="PRIVATE_PARTY">Private Party / Celebration</option>
+                    <option value="BIRTHDAY_PARTY">Birthday Party</option>
+                    <option value="GROUP_BOOKING">Group Booking</option>
+                    <option value="WEDDING_EVENT">Wedding / Reception Enquiry</option>
+                    <option value="CUSTOMER_CALLBACK">Customer Callback Request</option>
+                    <option value="GENERAL_ENQUIRY">General Banquets Enquiry</option>
                     <option value="PRIVATE_DINING">Private Dining Room</option>
-                    <option value="CORPORATE_EVENT">Corporate Dinner / Buyout</option>
-                    <option value="WEDDING">Wedding Celebration / Sangeet</option>
-                    <option value="BIRTHDAY">Milestone Birthday / Anniversary</option>
                     <option value="CATERING">Outdoor Luxury Catering</option>
                   </select>
                 </div>
@@ -249,6 +287,9 @@ export const LeadModal: React.FC<LeadModalProps> = ({
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold-400/15 border border-gold-400/30 text-gold-300 font-mono text-xs font-semibold mb-2">
+                Reference ID: {submittedRefId}
+              </div>
               <h3 className="text-2xl font-serif font-bold text-white">
                 Inquiry Forwarded
               </h3>
@@ -256,8 +297,15 @@ export const LeadModal: React.FC<LeadModalProps> = ({
                 Thank you, <strong>{name}</strong>. Our Banquets & Private Events Director has received your specifications for <strong>{outlet.name}</strong>.
               </p>
             </div>
+
+            {isDemo && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-1.5">
+                <span><strong>DEMO SIMULATION:</strong> This lead record has been logged in DEMO mode.</span>
+              </div>
+            )}
+
             <p className="text-xs text-slate-400">
-              A bespoke proposal and floorplan options will be delivered to <strong>{email}</strong> within 24 business hours.
+              A bespoke proposal and floorplan options will be delivered to <strong>{email}</strong> or followed up at <strong>{phone}</strong> within 24 business hours.
             </p>
             <button
               onClick={handleClose}

@@ -20,10 +20,11 @@ It features an intelligent AI customer concierge, an executive management portal
    - Dual-language support (English & Hindi).
    - Seamless outlet switching, menu recommendations, dietary filtering, and reservation initiation.
    - Graceful fallback: If verified information is missing in REAL mode, the concierge politely defers to human staff rather than guessing.
+   - Zero booking confirmation fabrication: Informs guests clearly that reservation submissions generate unique tracking IDs (`REF-RES-...`) awaiting human maître d' table review and allocation.
 
-3. **Hospitality Operations Management:**
-   - **Reservations Workflow:** Interactive customer reservation form and admin status manager (`NEW`, `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`).
-   - **Event & Lead Pipeline:** Captures inquiries for private dining, corporate buyouts, and celebrations.
+3. **Hospitality Operations Management (Phase 5 Complete):**
+   - **Reservations Request & Maître d' Workflow:** Customer reservation form, capacity overflow detection, unique reference ID tracking (`REF-RES-YYYYMMDD-XXXX`), full status lifecycle (`NEW`, `PENDING`, `UNDER_REVIEW`, `ACCEPTED`, `COMPLETED`, `REJECTED`, `CANCELLED`), staff assignment, internal notes, and status transition audit history.
+   - **Event & Lead Management Pipeline:** Tracks inquiries for private parties, corporate events, birthday celebrations, group bookings, wedding buyouts, and callbacks (`REF-LEAD-YYYYMMDD-XXXX`). Supports both AI chatbot and manual staff entry, stage transitions (`NEW`, `CONTACTED`, `QUALIFIED`, `FOLLOW_UP_REQUIRED`, `CONVERTED`, `CLOSED`), and CSV exports.
    - **Knowledge Base Studio:** Multi-format document uploader with automatic text extraction, semantic chunking, and vector indexing.
    - **Business Analytics:** Real-time metrics on guest inquiries, popular dishes, reservation trends, and unanswered question tracking.
    - **Security & RBAC:** Role-based access control (`Super Admin`, `Admin`, `Manager`, `Staff`) backed by secure JWT tokens.

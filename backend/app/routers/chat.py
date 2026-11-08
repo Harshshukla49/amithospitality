@@ -7,7 +7,8 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.conversation import Conversation, Message
 from app.models.outlet import Outlet
-from app.models.audit import EnvironmentSetting
+from app.models.audit import EnvironmentSetting, AuditLog
+from app.models.lead import Lead, generate_lead_ref
 from app.schemas.chat import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -16,6 +17,7 @@ from app.schemas.chat import (
 )
 from app.services.rag_service import generate_rag_chat_response
 from app.utils.security_middleware import sanitize_input_text, detect_prompt_injection
+from app.config import settings
 
 router = APIRouter(prefix="/api/v1/chat", tags=["AI Concierge & Chat"])
 
@@ -155,11 +157,58 @@ def submit_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/handover")
-def request_handover(outlet_id: Optional[int] = None, db: Session = Depends(get_db)):
-    """Dispatch human concierge handover alert."""
+def request_handover(
+    outlet_id: Optional[int] = None,
+    session_id: Optional[str] = None,
+    guest_name: Optional[str] = None,
+    guest_phone: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Dispatch human concierge handover alert.
+    Logs an immutable audit event and creates an urgent callback task for Guest Relations.
+    """
+    active_env = get_current_env(db)
+    outlet = db.query(Outlet).filter(Outlet.id == outlet_id).first() if outlet_id else None
+    outlet_name = outlet.name if outlet else "All Outlets"
+
+    # Log audit event
+    audit = AuditLog(
+        user_name=guest_name or "Guest",
+        user_role="CUSTOMER",
+        action="HUMAN_HANDOVER_REQUESTED",
+        entity_type="CONVERSATION",
+        environment=active_env,
+        details=f"Human concierge handover requested for {outlet_name}. Contact: {guest_phone or 'Not provided'}",
+    )
+    db.add(audit)
+
+    # Automatically generate a callback lead so staff can follow up
+    if guest_phone or guest_name:
+        callback_lead = Lead(
+            reference_id=generate_lead_ref(),
+            environment=active_env,
+            outlet_id=outlet_id or (outlet.id if outlet else 1),
+            outlet_name=outlet_name,
+            name=guest_name or "Handover Guest",
+            phone=guest_phone or "+91 00000 00000",
+            email="handover@concierge.local",
+            enquiry_type="CUSTOMER_CALLBACK",
+            guest_count=1,
+            target_date=datetime.utcnow().strftime("%Y-%m-%d"),
+            budget_range="Standard Guest Care",
+            source="AI_CONCIERGE_HANDOVER",
+            status="NEW",
+            notes=f"Priority callback requested via AI Concierge handover. Session: {session_id or 'N/A'}",
+            session_id=session_id,
+        )
+        db.add(callback_lead)
+
+    db.commit()
+
     return {
         "success": True,
-        "message": "A priority notification has been dispatched to the Guest Relations Desk. A concierge host will connect with you shortly.",
-        "direct_phone": "+91 11 4050 9900",
-        "email": "concierge@amithospitality.com",
+        "message": f"A priority notification has been dispatched to the Guest Relations Desk at {outlet_name}. A concierge host will connect with you shortly.",
+        "direct_phone": settings.HOTLINE_PHONE_NUMBER,
+        "email": settings.HOTLINE_EMAIL,
     }

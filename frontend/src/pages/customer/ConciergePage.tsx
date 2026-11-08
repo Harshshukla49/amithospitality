@@ -68,12 +68,27 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
     const query = textToSend || input;
     if (!query.trim() || isTyping) return;
 
-    if (query.toLowerCase().includes('book') || query.toLowerCase().includes('reserve')) {
+    const qLower = query.toLowerCase();
+    if (
+      qLower.includes('book') ||
+      qLower.includes('reserve') ||
+      qLower.includes('table') ||
+      qLower.includes('table chahiye') ||
+      qLower.includes('booking karni')
+    ) {
       setIsReservationOpen(true);
     } else if (
-      query.toLowerCase().includes('private') ||
-      query.toLowerCase().includes('banquet') ||
-      query.toLowerCase().includes('corporate')
+      qLower.includes('party') ||
+      qLower.includes('event') ||
+      qLower.includes('corporate') ||
+      qLower.includes('banquet') ||
+      qLower.includes('wedding') ||
+      qLower.includes('callback') ||
+      qLower.includes('contact me') ||
+      qLower.includes('call me') ||
+      qLower.includes('call back') ||
+      qLower.includes('private dining') ||
+      qLower.includes('lead')
     ) {
       setIsLeadOpen(true);
     }

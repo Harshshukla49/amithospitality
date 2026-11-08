@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from app.database import Base
 
 class KnowledgeDocument(Base):
@@ -37,6 +38,7 @@ class KnowledgeChunk(Base):
     content = Column(Text, nullable=False)
     metadata_json = Column(Text, nullable=True)  # JSON-encoded metadata
     embedding_json = Column(Text, nullable=True)  # Vector stored as JSON float array (dual SQLite/PostgreSQL)
+    embedding = Column(Vector(256), nullable=True)  # Native pgvector embedding column (PostgreSQL pgvector)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

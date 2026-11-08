@@ -18,14 +18,16 @@ INTENT_PATTERNS = {
         r"\b(connect|speak|talk|call)\b.*\b(human|agent|manager|desk|person|staff|team|representative)\b",
         r"\b(human support|customer care|receptionist|operator)\b",
         r"\b(complaint|escalate|escalation)\b",
+        r"\b(contact me|call me back|callback|have someone call|reach out to me|someone to contact me|call back|mujhe call karein|sampark karein)\b",
     ],
     "RESERVATION_REQUEST": [
         r"\b(book|reserve|reservation|table)\b.*\b(tonight|tomorrow|table|seats|dinner|lunch|evening)\b",
-        r"\b(i want to book|need a table|reserve a table|make a reservation)\b",
+        r"\b(i want to book|need a table|reserve a table|make a reservation|table reservation|book a table|table book|booking karni|table chahiye)\b",
         r"\b(seating capacity|table for \d+|party of \d+)\b",
     ],
     "EVENT_INQUIRY": [
-        r"\b(private dining|private party|banquet|wedding|corporate event|buyout|anniversary|birthday celebration|conference)\b",
+        r"\b(private dining|private party|banquet|wedding|corporate event|buyout|anniversary|birthday celebration|birthday party|conference)\b",
+        r"\b(organize a party|arrange a corporate event|plan an event|group booking|party karni|event organize|corporate dinner)\b",
         r"\b(hall|lawn|private room|celebrate|gala dinner|cocktail reception)\b",
     ],
     "DIETARY_INQUIRY": [

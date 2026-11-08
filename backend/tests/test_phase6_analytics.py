@@ -133,8 +133,36 @@ def test_phase6_analytics_and_audit():
     assert kpis.pending_reservations == 1  # Only DEMO res1
     assert kpis.total_leads == 1
     assert kpis.active_documents == 1
+    assert kpis.total_covers == 4
+    assert kpis.reservation_status_breakdown.get("NEW") == 1
+    assert kpis.lead_status_breakdown.get("NEW") == 1
+    assert kpis.lead_type_breakdown.get("CORPORATE_EVENT") == 1
     assert len(kpis.frequent_queries) >= 5
     assert len(kpis.unanswered_questions) >= 3
+
+    # 5b. Verify Outlet filtering & Zero-count empty state (NO FABRICATED 1482)
+    kpis_outlet_empty = get_dashboard_kpis(outlet_id=999, db=db)
+    assert kpis_outlet_empty.total_conversations == 0
+    assert kpis_outlet_empty.pending_reservations == 0
+    assert kpis_outlet_empty.total_leads == 0
+    assert kpis_outlet_empty.total_covers == 0
+    print("  [OK] Zero-count empty state verified: returns 0, no fabricated 1482 counts.")
+
+    # 5c. Verify REAL environment KPI isolation
+    kpis_real = get_dashboard_kpis(environment="REAL", db=db)
+    assert kpis_real.active_environment == "REAL"
+    assert kpis_real.pending_reservations == 1  # Only REAL res2
+    assert kpis_real.total_leads == 0           # Zero REAL leads
+    assert kpis_real.total_covers == 2          # res2 guest_count
+    assert kpis_real.total_conversations == 0
+    print("  [OK] REAL mode KPI isolation verified.")
+
+    # 5d. Verify Date Range filtering
+    kpis_all = get_dashboard_kpis(date_range="ALL", db=db)
+    assert kpis_all.pending_reservations == 1
+    kpis_24h = get_dashboard_kpis(date_range="24H", db=db)
+    assert kpis_24h.pending_reservations == 1
+    print("  [OK] Date range filter parameters (ALL, 24H, 7D) verified.")
 
     # 6. Verify export_analytics_summary_csv
     analytics_csv_response = export_analytics_summary_csv(current_user=admin_user, db=db)

@@ -30,6 +30,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const [reservationTime, setReservationTime] = useState('20:00');
   const [seatingPreference, setSeatingPreference] = useState<'INDOOR' | 'OUTDOOR' | 'ROOFTOP' | 'PRIVATE'>('ROOFTOP');
   const [specialRequests, setSpecialRequests] = useState('');
+  const [submittedRefId, setSubmittedRefId] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -38,8 +39,13 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestName.trim() || !guestPhone.trim()) {
-      setError('Guest name and phone number are required.');
+    const cleanPhone = guestPhone.replace(/\D/g, '');
+    if (!guestName.trim()) {
+      setError('Please provide the guest full name.');
+      return;
+    }
+    if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+      setError('Please provide a valid phone number (7 to 15 digits).');
       return;
     }
 
@@ -49,34 +55,39 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     try {
       const saved = await createReservationApi({
         outlet_id: outlet.id,
-        guest_name: guestName,
-        guest_phone: guestPhone,
-        guest_email: guestEmail || undefined,
+        guest_name: guestName.trim(),
+        guest_phone: guestPhone.trim(),
+        guest_email: guestEmail.trim() || undefined,
         guest_count: guestCount,
         reservation_date: reservationDate,
         reservation_time: reservationTime,
         seating_preference: seatingPreference,
-        special_requests: specialRequests || undefined,
+        special_requests: specialRequests.trim() || undefined,
       });
 
+      const refId = saved.referenceId || `REF-RES-${reservationDate.replace(/-/g, '')}-${saved.id}`;
+      setSubmittedRefId(refId);
       onSuccess(saved);
       setIsSubmitted(true);
     } catch (err: any) {
       console.warn('Backend reservation error, using local fallback:', err);
+      const generatedRef = `REF-RES-${reservationDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      setSubmittedRefId(generatedRef);
       // Resilient fallback
       const fallback: ReservationRequest = {
         id: Date.now(),
+        referenceId: generatedRef,
         environment,
         outletId: outlet.id,
         outletName: outlet.name,
-        guestName,
-        guestPhone,
-        guestEmail,
+        guestName: guestName.trim(),
+        guestPhone: guestPhone.trim(),
+        guestEmail: guestEmail.trim(),
         guestCount,
         reservationDate,
         reservationTime,
         seatingPreference,
-        specialRequests,
+        specialRequests: specialRequests.trim(),
         status: 'NEW',
         internalNotes: isDemo ? 'DEMO SIMULATION: Sample customer booking request.' : 'Online web inquiry received.',
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -277,16 +288,29 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold-400/15 border border-gold-400/30 text-gold-300 font-mono text-xs font-semibold mb-2">
+                Reference ID: {submittedRefId}
+              </div>
               <h3 className="text-2xl font-serif font-bold text-white">
-                Request Received
+                Reservation Request Submitted
               </h3>
               <p className="text-xs text-slate-300 max-w-sm mx-auto mt-2">
-                Thank you, <strong>{guestName}</strong>. Your reservation inquiry for <strong>{guestCount} guests</strong> at <strong>{outlet.name}</strong> on <strong>{reservationDate} at {reservationTime}</strong> has been logged.
+                Thank you, <strong>{guestName}</strong>. Your reservation request for <strong>{guestCount} guests</strong> at <strong>{outlet.name}</strong> on <strong>{reservationDate} at {reservationTime}</strong> has been received by our maître d'.
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-charcoal-900 border border-slate-700/80 text-xs text-slate-400 max-w-sm mx-auto text-left">
-              <p className="font-semibold text-gold-300 mb-1">What happens next?</p>
-              <p>Our restaurant host will review table allocations and contact you via phone ({guestPhone}) shortly to confirm availability.</p>
+
+            {isDemo && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span><strong>DEMO SIMULATION:</strong> This is a sample request logged in DEMO mode.</span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-xl bg-charcoal-900 border border-slate-700/80 text-xs text-slate-400 max-w-sm mx-auto text-left space-y-1.5">
+              <p className="font-semibold text-gold-300">Maître d' Verification Protocol:</p>
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                Please note that this is a <strong>request awaiting review</strong>, not an automated table confirmation. Our maître d' will review seating allocations and reach out to <strong>{guestPhone}</strong> to confirm your table.
+              </p>
             </div>
             <button
               onClick={handleClose}

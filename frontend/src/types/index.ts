@@ -72,10 +72,22 @@ export type ReservationStatus =
   | 'UNDER_REVIEW'
   | 'ACCEPTED'
   | 'REJECTED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'COMPLETED';
+
+export interface ReservationHistoryItem {
+  id: number;
+  reservationId: number;
+  previousStatus: string | null;
+  newStatus: string;
+  changedByName: string;
+  notes?: string;
+  createdAt: string;
+}
 
 export interface ReservationRequest {
   id: number;
+  referenceId?: string;
   environment: Environment;
   outletId: number;
   outletName: string;
@@ -89,15 +101,49 @@ export interface ReservationRequest {
   specialRequests?: string;
   status: ReservationStatus;
   internalNotes?: string;
+  assignedStaffName?: string;
+  conversationId?: number;
+  sessionId?: string;
   createdAt: string;
 }
 
-export type LeadStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL_SENT' | 'WON' | 'LOST';
+export type LeadStatus =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'QUALIFIED'
+  | 'FOLLOW_UP_REQUIRED'
+  | 'CONVERTED'
+  | 'CLOSED'
+  | 'PROPOSAL_SENT'
+  | 'WON'
+  | 'LOST';
 
-export type LeadType = 'PRIVATE_DINING' | 'CORPORATE_EVENT' | 'WEDDING' | 'BIRTHDAY' | 'CATERING';
+export type LeadType =
+  | 'GENERAL_ENQUIRY'
+  | 'PRIVATE_PARTY'
+  | 'BIRTHDAY_PARTY'
+  | 'CORPORATE_EVENT'
+  | 'GROUP_BOOKING'
+  | 'WEDDING_EVENT'
+  | 'CUSTOMER_CALLBACK'
+  | 'PRIVATE_DINING'
+  | 'WEDDING'
+  | 'BIRTHDAY'
+  | 'CATERING';
+
+export interface LeadHistoryItem {
+  id: number;
+  leadId: number;
+  previousStatus: string | null;
+  newStatus: string;
+  changedByName: string;
+  notes?: string;
+  createdAt: string;
+}
 
 export interface Lead {
   id: number;
+  referenceId?: string;
   environment: Environment;
   outletId: number;
   outletName: string;
@@ -110,6 +156,12 @@ export interface Lead {
   budgetRange: string;
   status: LeadStatus;
   notes?: string;
+  internalNotes?: string;
+  assignedStaffName?: string;
+  conversationId?: number;
+  sessionId?: string;
+  source?: string;
+  requirements?: string;
   createdAt: string;
 }
 

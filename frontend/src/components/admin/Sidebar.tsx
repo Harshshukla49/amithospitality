@@ -9,6 +9,7 @@ import {
   Sliders,
   Shield,
   Layers,
+  Network,
 } from 'lucide-react';
 import { useEnvironment } from '../../context/EnvironmentContext';
 
@@ -19,6 +20,7 @@ export type AdminTab =
   | 'RESERVATIONS'
   | 'LEADS'
   | 'ANALYTICS'
+  | 'INTEGRATIONS'
   | 'SETTINGS';
 
 interface SidebarProps {
@@ -68,6 +70,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'ANALYTICS',
       label: 'Analytics & Insights',
       icon: <BarChart3 className="w-4 h-4" />,
+    },
+    {
+      id: 'INTEGRATIONS',
+      label: 'Integrations Hub',
+      icon: <Network className="w-4 h-4" />,
     },
     {
       id: 'SETTINGS',

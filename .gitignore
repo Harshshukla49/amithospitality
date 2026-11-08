@@ -31,7 +31,11 @@ ENV/
 # Database and Uploads
 *.sqlite3
 *.db
+*.db.*
+*.bak
+backups/
 uploads/
+backend/uploads/
 storage/
 temp/
 
