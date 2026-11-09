@@ -32,7 +32,9 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication & RBAC"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(creds: LoginRequest, db: Session = Depends(get_db)):
+    print(f"DEBUG: login called for {creds.email}", flush=True)
     user = db.query(User).filter(User.email == creds.email, User.is_active == True).first()
+    print(f"DEBUG: user query finished, found={user is not None}", flush=True)
     if not user or not verify_password(creds.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

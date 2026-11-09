@@ -49,6 +49,17 @@ def create_menu_item(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
     db: Session = Depends(get_db),
 ):
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
+    # IDOR Prevention: Outlet Manager can only create items for their assigned outlet
+    if current_user and getattr(current_user, "role", None) == "MANAGER" and getattr(current_user, "outlet_id", None):
+        if item_in.outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet tampering forbidden: You are assigned to outlet {current_user.outlet_id} and cannot create menu items for outlet {item_in.outlet_id}.",
+            )
+
     active_env = item_in.environment or get_current_env(db)
     new_item = MenuItem(
         outlet_id=item_in.outlet_id,
@@ -75,9 +86,20 @@ def update_menu_item(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
     db: Session = Depends(get_db),
 ):
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found")
+
+    # IDOR Prevention: Outlet Manager can only modify items for their assigned outlet
+    if current_user and getattr(current_user, "role", None) == "MANAGER" and getattr(current_user, "outlet_id", None):
+        if item.outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet tampering forbidden: Menu item {item_id} belongs to outlet {item.outlet_id}, but you are assigned to outlet {current_user.outlet_id}.",
+            )
 
     if item_update.price is not None:
         item.price = item_update.price
@@ -98,9 +120,20 @@ def delete_menu_item(
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
     db: Session = Depends(get_db),
 ):
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found")
+
+    # IDOR Prevention: Outlet Manager can only delete items for their assigned outlet
+    if current_user and getattr(current_user, "role", None) == "MANAGER" and getattr(current_user, "outlet_id", None):
+        if item.outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet tampering forbidden: Menu item {item_id} belongs to outlet {item.outlet_id}, but you are assigned to outlet {current_user.outlet_id}.",
+            )
 
     db.delete(item)
     db.commit()

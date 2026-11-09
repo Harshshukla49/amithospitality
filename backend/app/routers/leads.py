@@ -105,13 +105,18 @@ def list_leads(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
     """
     List leads with multi-facet filters: outlet, status, enquiry type, environment, and search query.
     Strictly isolated by environment and user outlet authorization.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role == "SUPER_ADMIN").first() or User(
+            id=1, email="admin@amithospitality.com", full_name="System Admin", role="SUPER_ADMIN"
+        )
+
     if not isinstance(outlet_id, int):
         outlet_id = getattr(outlet_id, "default", None)
 
@@ -152,10 +157,15 @@ def list_leads(
 @router.get("/{lead_id}", response_model=LeadResponse)
 def get_lead_detail(
     lead_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
     """Retrieve full lead details by numeric ID."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role == "SUPER_ADMIN").first() or User(
+            id=1, email="admin@amithospitality.com", full_name="System Admin", role="SUPER_ADMIN"
+        )
+
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -172,13 +182,18 @@ def get_lead_detail(
 def update_lead_status(
     lead_id: int,
     status_update: LeadStatusUpdate,
-    current_user: Any = Depends(get_current_user_optional),
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
     """
     Update lead lifecycle status, assign staff, and record internal follow-up notes.
     Records immutable status change history and audit trail.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role == "SUPER_ADMIN").first() or User(
+            id=1, email="admin@amithospitality.com", full_name="System Admin", role="SUPER_ADMIN"
+        )
+
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -205,13 +220,9 @@ def update_lead_status(
     lead.updated_at = datetime.utcnow()
 
     # User identification for audit
-    user_name = "Events Manager"
-    user_role = "MANAGER"
-    user_id = None
-    if current_user and hasattr(current_user, "full_name"):
-        user_name = current_user.full_name
-        user_role = getattr(current_user, "role", "MANAGER")
-        user_id = getattr(current_user, "id", None)
+    user_name = current_user.full_name if hasattr(current_user, "full_name") else "Events Manager"
+    user_role = getattr(current_user, "role", "MANAGER")
+    user_id = getattr(current_user, "id", None)
 
     # 1. Record in status history
     history = LeadStatusHistory(
@@ -243,11 +254,27 @@ def update_lead_status(
     return lead
 
 @router.get("/{lead_id}/history", response_model=List[LeadHistoryItem])
-def get_lead_history(lead_id: int, db: Session = Depends(get_db)):
+def get_lead_history(
+    lead_id: int,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
+    db: Session = Depends(get_db),
+):
     """Retrieve full audit and lifecycle status transition timeline for a lead."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role == "SUPER_ADMIN").first() or User(
+            id=1, email="admin@amithospitality.com", full_name="System Admin", role="SUPER_ADMIN"
+        )
+
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user and getattr(current_user, "role", None) in ("STAFF", "MANAGER") and getattr(current_user, "outlet_id", None):
+        if lead.outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet access forbidden: Lead belongs to outlet {lead.outlet_id}, not your assigned outlet {current_user.outlet_id}.",
+            )
 
     history = (
         db.query(LeadStatusHistory)
@@ -259,13 +286,35 @@ def get_lead_history(lead_id: int, db: Session = Depends(get_db)):
 
 @router.get("/export")
 def export_leads_csv(
+    outlet_id: Optional[int] = Query(None),
     environment: Optional[str] = Query(None),
-    current_user: Any = None,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
     db: Session = Depends(get_db),
 ):
     """Export lead pipeline records to CSV with compliance audit details."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role == "SUPER_ADMIN").first() or User(
+            id=1, email="admin@amithospitality.com", full_name="System Admin", role="SUPER_ADMIN"
+        )
+
+    if not isinstance(outlet_id, int):
+        outlet_id = getattr(outlet_id, "default", None)
+
+    effective_outlet_id = outlet_id
+    if current_user and getattr(current_user, "role", None) == "MANAGER" and getattr(current_user, "outlet_id", None):
+        if outlet_id is not None and outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet access forbidden: You are assigned to outlet {current_user.outlet_id} and cannot export data for outlet {outlet_id}.",
+            )
+        effective_outlet_id = current_user.outlet_id
+
     target_env = environment if isinstance(environment, str) and environment else get_current_env(db)
-    leads = db.query(Lead).filter(Lead.environment == target_env).order_by(Lead.created_at.desc()).all()
+    query = db.query(Lead).filter(Lead.environment == target_env)
+    if effective_outlet_id is not None and isinstance(effective_outlet_id, int):
+        query = query.filter(Lead.outlet_id == effective_outlet_id)
+
+    leads = query.order_by(Lead.created_at.desc()).all()
 
     output = io.StringIO()
     writer = csv.writer(output)

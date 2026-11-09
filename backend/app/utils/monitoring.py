@@ -34,6 +34,9 @@ SENSITIVE_KEYS = {
     "whatsapp_token",
     "gemini_api_key",
     "openai_api_key",
+    "card",
+    "credit_card",
+    "cvv",
 }
 
 def scrub_sensitive_dict(d: Any) -> Any:

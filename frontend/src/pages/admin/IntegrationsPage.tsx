@@ -56,7 +56,7 @@ export const IntegrationsPage: React.FC = () => {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
 
-  const token = localStorage.getItem('access_token') || '';
+  const token = localStorage.getItem('amit_access_token') || localStorage.getItem('access_token') || '';
 
   const fetchStatus = async () => {
     setLoading(true);

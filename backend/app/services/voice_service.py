@@ -29,11 +29,18 @@ class TwilioVoiceService:
             and not settings.TWILIO_ACCOUNT_SID.startswith("your_")
         )
 
-    def verify_twilio_signature(self, full_url: str, post_params: Dict[str, str], signature: Optional[str]) -> bool:
+    def verify_twilio_signature(
+        self,
+        full_url: str,
+        post_params: Dict[str, str],
+        signature: Optional[str],
+        auth_token: Optional[str] = None,
+    ) -> bool:
         """
         Validate Twilio X-Twilio-Signature using HMAC-SHA1.
         """
-        if not settings.TWILIO_AUTH_TOKEN:
+        active_token = auth_token or settings.TWILIO_AUTH_TOKEN
+        if not active_token:
             return True
 
         if not signature:
@@ -46,7 +53,7 @@ class TwilioVoiceService:
 
         computed_sig = base64.b64encode(
             hmac.new(
-                settings.TWILIO_AUTH_TOKEN.encode("utf-8"),
+                active_token.encode("utf-8"),
                 data_string.encode("utf-8"),
                 hashlib.sha1,
             ).digest()

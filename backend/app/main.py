@@ -26,12 +26,11 @@ from app.routers import (
 # Initialize production error telemetry
 init_sentry()
 
-# Initialize tables and storage directory on import
-Base.metadata.create_all(bind=engine)
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize tables and storage directory on server startup
+    Base.metadata.create_all(bind=engine)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     yield
 
 app = FastAPI(

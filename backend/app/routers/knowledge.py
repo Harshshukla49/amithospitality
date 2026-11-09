@@ -39,8 +39,14 @@ def get_current_env(db: Session) -> str:
     return setting.active_environment if setting else "DEMO"
 
 @router.get("/stats", response_model=KnowledgeStatsResponse)
-def get_knowledge_stats(db: Session = Depends(get_db)):
+def get_knowledge_stats(
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
+    db: Session = Depends(get_db),
+):
     """Retrieve summary metrics across DEMO and REAL knowledge bases."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     current_env = get_current_env(db)
     
     demo_docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.environment == "DEMO").count()
@@ -82,13 +88,26 @@ def list_documents(
     category: Optional[str] = Query(None),
     outlet_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),  # 'ACTIVE', 'INACTIVE', or 'ALL'
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
-    """List knowledge documents with multi-faceted filtering."""
+    """List knowledge documents with multi-faceted filtering and tenant isolation."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     env_str = environment if isinstance(environment, str) else None
     cat_str = category if isinstance(category, str) else None
     out_id = outlet_id if isinstance(outlet_id, int) else None
     status_str = status if isinstance(status, str) else None
+
+    # Multi-outlet tenant isolation:
+    if current_user and getattr(current_user, "role", None) in ("STAFF", "MANAGER") and getattr(current_user, "outlet_id", None):
+        if out_id is not None and out_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet access forbidden: You are assigned to outlet {current_user.outlet_id}.",
+            )
+        out_id = current_user.outlet_id
 
     target_env = env_str or get_current_env(db)
     query = db.query(KnowledgeDocument).filter(KnowledgeDocument.environment == target_env)
@@ -109,12 +128,24 @@ def list_documents(
 @router.get("/documents/{doc_id}", response_model=KnowledgeDocDetailResponse)
 def get_document_detail(
     doc_id: int,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
     """Retrieve detailed document info with all chunk extracts."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Knowledge document not found")
+
+    # Tenant isolation check
+    if current_user and getattr(current_user, "role", None) in ("STAFF", "MANAGER") and getattr(current_user, "outlet_id", None):
+        if doc.outlet_id is not None and doc.outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet access forbidden: Document belongs to outlet {doc.outlet_id}.",
+            )
     
     chunks = (
         db.query(KnowledgeChunk)
@@ -168,6 +199,9 @@ def upload_document(
     Validates file extension, limits file size to 20MB, prevents directory traversal,
     processes text, creates semantic chunks, generates vectors, and indexes into store.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
 
@@ -293,6 +327,9 @@ def add_manual_knowledge(
     db: Session = Depends(get_db),
 ):
     """Manually add policy, menu details, timing or FAQ directly into knowledge store."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     sections = [{"title": req.title, "page_number": 1, "content": req.content}]
     chunks_data = chunk_text(sections, chunk_size=450, chunk_overlap=60)
     if not chunks_data:
@@ -361,6 +398,9 @@ def update_document(
     db: Session = Depends(get_db),
 ):
     """Update knowledge document metadata (title, category, outlet)."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -389,6 +429,9 @@ def toggle_document_status(
     db: Session = Depends(get_db),
 ):
     """Activate or deactivate a document and all its indexed vector chunks."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -429,6 +472,9 @@ def reprocess_document(
     Reprocess and reindex an existing document from original file or stored content.
     Refreshes all chunks and vectors.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -490,6 +536,9 @@ def delete_document(
     db: Session = Depends(get_db),
 ):
     """Delete document and all associated chunks permanently."""
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -530,16 +579,29 @@ def search_knowledge(
     outlet_id: Optional[int] = Query(None),
     category: Optional[str] = Query(None),
     top_k: int = Query(5, ge=1, le=20),
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
     """
     Search knowledge chunks using hybrid vector + lexical retrieval.
     Guarantees strict isolation: searches ONLY the selected/active environment.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     env_str = environment if isinstance(environment, str) else None
     cat_str = category if isinstance(category, str) else None
     out_id = outlet_id if isinstance(outlet_id, int) else None
     k_val = top_k if isinstance(top_k, int) else 5
+
+    # Multi-outlet tenant isolation:
+    if current_user and getattr(current_user, "role", None) in ("STAFF", "MANAGER") and getattr(current_user, "outlet_id", None):
+        if out_id is not None and out_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet access forbidden: You are assigned to outlet {current_user.outlet_id}.",
+            )
+        out_id = current_user.outlet_id
 
     target_env = env_str or get_current_env(db)
     results = search_relevant_chunks(

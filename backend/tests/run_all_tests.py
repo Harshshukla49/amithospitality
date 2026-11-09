@@ -19,6 +19,9 @@ TEST_SUITES = [
     ("Phase 10 — Real AI, WhatsApp, Voice, Email & Enterprise Integrations", "test_phase10_integrations.py"),
     ("Phase 11 — Enterprise QA, Security Validation & Reliability", "test_phase11_enterprise_qa.py"),
     ("Phase 12 — Cloud Deployment, Infrastructure & Production Smoke", "test_phase12_deployment_smoke.py"),
+    ("Phase 14 — Real HTTP Integration, RBAC, Multi-Outlet Isolation & Streaming CSV", "test_phase14_http_integration.py"),
+    ("Phase 15 — Database Reliability, Atomic Transactions & 20-Worker Concurrency", "test_phase15_concurrency.py"),
+    ("Phase 17 — External Enterprise Integrations (Gemini, WhatsApp, Twilio, SendGrid, Redis, Sentry)", "test_phase17_external_integrations.py"),
 ]
 
 def run_master_regression_suite():

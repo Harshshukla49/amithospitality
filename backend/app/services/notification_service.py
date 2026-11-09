@@ -3,6 +3,8 @@ import json
 import base64
 import logging
 import smtplib
+import html
+import re
 import urllib.request
 import urllib.error
 from email.mime.text import MIMEText
@@ -19,6 +21,22 @@ class NotificationService:
     Supports SendGrid & standard SMTP for email, and Twilio for SMS.
     Provides branded HTML templates, deduplication, and connectivity verification.
     """
+
+    @staticmethod
+    def sanitize_html(text: Optional[str]) -> str:
+        """
+        Strip script tags, event handlers, and escape HTML entities
+        to prevent stored and reflective XSS in email templates.
+        """
+        if not text:
+            return ""
+        # Strip script and dangerous executable tags
+        cleaned = re.sub(r"<\s*(script|iframe|object|embed|style|meta)[^>]*>.*?<\s*/\s*\1\s*>", "", str(text), flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r"<\s*(script|iframe|object|embed|style|meta|input|form|img|svg|audio|video|link)[^>]*>", "", cleaned, flags=re.IGNORECASE)
+        # Strip inline event handlers like onerror=, onclick=, onload=, etc.
+        cleaned = re.sub(r"\bon\w+\s*=\s*(?:'[^']*'|\"[^\"]*\"|[^\s>]+)", "", cleaned, flags=re.IGNORECASE)
+        # Escape all remaining special HTML characters
+        return html.escape(cleaned.strip())
 
     def __init__(self):
         # In-memory deduplication set: {idempotency_key: timestamp}
@@ -249,6 +267,12 @@ class NotificationService:
         guests_count: int,
         is_demo: bool = True,
     ) -> str:
+        s_ref_id = self.sanitize_html(ref_id)
+        s_guest_name = self.sanitize_html(guest_name)
+        s_outlet_name = self.sanitize_html(outlet_name)
+        s_date_str = self.sanitize_html(date_str)
+        s_time_str = self.sanitize_html(time_str)
+
         demo_banner = """
         <div style="background-color: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center;">
             ⚠️ DEMO SIMULATION NOTICE — This is an automated demonstration booking request. No actual restaurant reservation has been secured.
@@ -268,16 +292,16 @@ class NotificationService:
 
         <h2 style="color: #f8fafc; font-size: 20px; margin-top: 0;">Reservation Request Received</h2>
         <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6;">
-            Dear <strong>{guest_name}</strong>,<br>
+            Dear <strong>{s_guest_name}</strong>,<br>
             Thank you for choosing Amit Hospitality. We have received your reservation inquiry and our Concierge team is currently reviewing availability.
         </p>
 
         <div style="background-color: #0f172a; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #334155;">
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #cbd5e1;">
-                <tr><td style="padding: 6px 0; color: #94a3b8;">Reference ID:</td><td style="font-family: monospace; font-weight: bold; color: #f59e0b;">{ref_id}</td></tr>
-                <tr><td style="padding: 6px 0; color: #94a3b8;">Outlet:</td><td style="font-weight: bold; color: #ffffff;">{outlet_name}</td></tr>
-                <tr><td style="padding: 6px 0; color: #94a3b8;">Date:</td><td>{date_str}</td></tr>
-                <tr><td style="padding: 6px 0; color: #94a3b8;">Preferred Time:</td><td>{time_str}</td></tr>
+                <tr><td style="padding: 6px 0; color: #94a3b8;">Reference ID:</td><td style="font-family: monospace; font-weight: bold; color: #f59e0b;">{s_ref_id}</td></tr>
+                <tr><td style="padding: 6px 0; color: #94a3b8;">Outlet:</td><td style="font-weight: bold; color: #ffffff;">{s_outlet_name}</td></tr>
+                <tr><td style="padding: 6px 0; color: #94a3b8;">Date:</td><td>{s_date_str}</td></tr>
+                <tr><td style="padding: 6px 0; color: #94a3b8;">Preferred Time:</td><td>{s_time_str}</td></tr>
                 <tr><td style="padding: 6px 0; color: #94a3b8;">Party Size:</td><td>{guests_count} Guests</td></tr>
                 <tr><td style="padding: 6px 0; color: #94a3b8;">Status:</td><td><span style="background: #eab308; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">PENDING REVIEW</span></td></tr>
             </table>
@@ -304,17 +328,27 @@ class NotificationService:
         notes: Optional[str] = None,
         is_demo: bool = True,
     ) -> str:
+        s_ref_id = self.sanitize_html(ref_id)
+        s_guest_name = self.sanitize_html(guest_name)
+        s_outlet_name = self.sanitize_html(outlet_name)
+        s_status = self.sanitize_html(status)
+        s_notes = self.sanitize_html(notes) if notes else ""
+
         status_color = "#10b981" if status.lower() == "accepted" else "#ef4444"
         return f"""<!DOCTYPE html>
 <html>
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 24px;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 32px;">
-        <h2 style="color: #f8fafc; font-size: 20px;">Reservation Update: <span style="color: {status_color};">{status.upper()}</span></h2>
+        <div style="text-align: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 24px;">
+            <h1 style="color: #f59e0b; margin: 0; font-size: 24px; letter-spacing: 1px;">AMIT HOSPITALITY</h1>
+            <p style="color: #94a3b8; margin: 4px 0 0; font-size: 14px;">Luxury Dining & Bespoke Experiences</p>
+        </div>
+        <h2 style="color: #f8fafc; font-size: 20px;">Reservation Update: <span style="color: {status_color};">{s_status.upper()}</span></h2>
         <p style="color: #cbd5e1; font-size: 15px;">
-            Dear {guest_name},<br>
-            Your dining request <strong>{ref_id}</strong> at <strong>{outlet_name}</strong> has been updated to: <strong>{status.upper()}</strong>.
+            Dear {s_guest_name},<br>
+            Your dining request <strong>{s_ref_id}</strong> at <strong>{s_outlet_name}</strong> has been updated to: <strong>{s_status.upper()}</strong>.
         </p>
-        {f'<div style="background:#0f172a; padding:12px; border-radius:6px; margin:16px 0; color:#e2e8f0; font-size:14px;"><strong>Staff Note:</strong> {notes}</div>' if notes else ''}
+        {f'<div style="background:#0f172a; padding:12px; border-radius:6px; margin:16px 0; color:#e2e8f0; font-size:14px;"><strong>Staff Note:</strong> {s_notes}</div>' if s_notes else ''}
         <p style="color: #94a3b8; font-size: 13px;">For inquiries or changes, please call our Concierge at {settings.HOTLINE_PHONE_NUMBER}.</p>
     </div>
 </body>
@@ -328,15 +362,20 @@ class NotificationService:
         outlet_name: str,
         is_demo: bool = True,
     ) -> str:
+        s_lead_id = self.sanitize_html(lead_id)
+        s_guest_name = self.sanitize_html(guest_name)
+        s_event_type = self.sanitize_html(event_type)
+        s_outlet_name = self.sanitize_html(outlet_name)
+
         return f"""<!DOCTYPE html>
 <html>
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 24px;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 32px;">
         <h2 style="color: #f59e0b; font-size: 20px;">Event & Banquet Inquiry Received</h2>
         <p style="color: #cbd5e1; font-size: 15px;">
-            Dear {guest_name},<br>
-            Thank you for considering Amit Hospitality for your upcoming {event_type} at {outlet_name}.
-            Our Private Events & Catering Manager has been assigned to your request (Ref: #{lead_id}) and will prepare a tailored proposal within 24 business hours.
+            Dear {s_guest_name},<br>
+            Thank you for considering Amit Hospitality for your upcoming {s_event_type} at {s_outlet_name}.
+            Our Private Events & Catering Manager has been assigned to your request (Ref: #{s_lead_id}) and will prepare a tailored proposal within 24 business hours.
         </p>
     </div>
 </body>
