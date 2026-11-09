@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, API_BASE_URL } from './client';
 
 export interface FrequentQuery {
   query: string;
@@ -60,7 +60,7 @@ export async function exportAnalyticsSummaryCsv(params?: {
   if (params?.environment) queryParts.push(`environment=${encodeURIComponent(params.environment)}`);
 
   const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
-  const res = await fetch(`/api/v1/analytics/export${qs}`, { headers });
+  const res = await fetch(`${API_BASE_URL}/api/v1/analytics/export${qs}`, { headers });
   if (!res.ok) throw new Error('Failed to export analytics report CSV');
   return res.blob();
 }

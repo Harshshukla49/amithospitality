@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
+import { API_BASE_URL } from '../api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -37,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const syncBackendToken = async (role: UserRole, email?: string) => {
     const creds = ROLE_CREDENTIALS[role] || ROLE_CREDENTIALS.SUPER_ADMIN;
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

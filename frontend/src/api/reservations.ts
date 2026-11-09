@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, API_BASE_URL } from './client';
 import { ReservationRequest, ReservationStatus, ReservationHistoryItem } from '../types';
 
 export interface CreateReservationPayload {
@@ -134,7 +134,7 @@ export async function exportReservationsCsv(environment?: string): Promise<Blob>
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`/api/v1/reservations/export${envParam}`, { headers });
+  const res = await fetch(`${API_BASE_URL}/api/v1/reservations/export${envParam}`, { headers });
   if (!res.ok) throw new Error('Failed to export CSV');
   return res.blob();
 }

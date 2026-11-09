@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, API_BASE_URL } from './client';
 import { Lead, LeadStatus, LeadType, LeadHistoryItem } from '../types';
 
 export interface CreateLeadPayload {
@@ -139,7 +139,7 @@ export async function exportLeadsCsv(environment?: string): Promise<Blob> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`/api/v1/leads/export${envParam}`, { headers });
+  const res = await fetch(`${API_BASE_URL}/api/v1/leads/export${envParam}`, { headers });
   if (!res.ok) throw new Error('Failed to export leads CSV');
   return res.blob();
 }

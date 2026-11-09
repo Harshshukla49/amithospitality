@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, API_BASE_URL } from './client';
 import { AuditLog } from '../types';
 
 export async function fetchAuditLogsApi(limit: number = 50, environment?: string): Promise<AuditLog[]> {
@@ -22,7 +22,7 @@ export async function exportAuditLogsCsv(environment?: string): Promise<Blob> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`/api/v1/audit/export${envParam}`, { headers });
+  const res = await fetch(`${API_BASE_URL}/api/v1/audit/export${envParam}`, { headers });
   if (!res.ok) throw new Error('Failed to export audit logs CSV');
   return res.blob();
 }
