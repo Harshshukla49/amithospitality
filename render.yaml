@@ -1,5 +1,5 @@
 # ==============================================================================
-# AMIT AI CONCIERGE — RENDER PRODUCTION BLUEPRINT SPECIFICATION
+# AMIT AI CONCIERGE — RENDER FREE BLUEPRINT SPECIFICATION
 # Official Enterprise Hospitality Platform Deployment for Amit Hospitality
 # Reference: https://amithospitality.com/
 # ==============================================================================
@@ -12,7 +12,7 @@ services:
     name: amit-concierge-api
     runtime: python
     region: frankfurt # or oregon / singapore
-    plan: starter
+    plan: free
     buildCommand: "cd backend && pip install -r requirements.txt && python -m alembic upgrade head"
     startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4"
     healthCheckPath: /api/v1/health
@@ -44,7 +44,7 @@ services:
       - key: ALLOWED_ORIGINS
         value: "https://amit-concierge-ui.onrender.com,https://amithospitality.com,https://*.amithospitality.com"
       - key: UPLOAD_DIR
-        value: "/var/data/uploads"
+        value: "./uploads"
       - key: AI_PROVIDER
         value: gemini
       - key: GEMINI_API_KEY
@@ -71,10 +71,6 @@ services:
         sync: false
       - key: SENDGRID_API_KEY
         sync: false
-    disk:
-      name: uploads-storage
-      mountPath: /var/data/uploads
-      sizeGB: 10
 
   # ----------------------------------------------------------------------------
   # 2. Frontend Web Client (React + TypeScript + Vite + Tailwind CSS)
@@ -82,7 +78,6 @@ services:
   - type: web
     name: amit-concierge-ui
     runtime: static
-    plan: starter
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: ./frontend/dist
     routes:
@@ -112,7 +107,7 @@ services:
 databases:
   - name: amit-concierge-postgres
     region: frankfurt
-    plan: starter
+    plan: free
     databaseName: amit_concierge
     user: amit_admin
     ipAllowList: [] # internal Render network access
