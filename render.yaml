@@ -82,7 +82,6 @@ services:
   - type: web
     name: amit-concierge-ui
     runtime: static
-    region: frankfurt
     plan: starter
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: ./frontend/dist
