@@ -58,7 +58,9 @@ class GuestProfileResponse(BaseModel):
     staff_notes: Optional[str] = None
     vip_status: bool
     total_visits: int
-    total_spend: float
+    total_spend: Optional[float] = 0.0
+    currency: Optional[str] = "INR"
+    is_shared_contact: Optional[bool] = False
     preferred_outlet_id: Optional[int] = None
     preferred_outlet_name: Optional[str] = None
     created_at: Optional[datetime] = None

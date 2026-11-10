@@ -1,6 +1,7 @@
 import re
 import secrets
 import hashlib
+import hmac
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
 
+from app.config import settings
 from app.models.reservation import ReservationRequest, ReservationStatusHistory
 from app.models.guest import GuestVerification, GuestAccessAudit, ReservationModificationRequest
 from app.models.outlet import Outlet
@@ -19,6 +21,15 @@ from app.services.notification_service import notification_service
 from app.utils.security import create_access_token, decode_token
 
 logger = logging.getLogger("guest_self_service")
+
+def compute_otp_hmac(reference_id: str, otp_code: str) -> str:
+    """
+    Cryptographic HMAC-SHA256 hash bound to server JWT secret and reference_id.
+    Completely prevents offline brute-forcing and cross-reservation hash replay.
+    """
+    secret = (settings.JWT_SECRET_KEY or "fallback_secret_amit_hospitality").encode("utf-8")
+    msg = f"otp:{reference_id.strip()}:{otp_code.strip()}".encode("utf-8")
+    return hmac.new(secret, msg, hashlib.sha256).hexdigest()
 
 class GuestSelfService:
     """
@@ -79,14 +90,40 @@ class GuestSelfService:
                 detail="No booking found matching the provided reference and contact details.",
             )
 
-        # 3. Verify contact matches reservation guest_phone or guest_email
+        # 3. Resend Cooldown Check: Enforce minimum 60-second delay between OTP dispatches
+        recent_active = (
+            db.query(GuestVerification)
+            .filter(
+                GuestVerification.reference_id == clean_ref,
+                GuestVerification.created_at >= datetime.utcnow() - timedelta(seconds=60),
+            )
+            .order_by(GuestVerification.created_at.desc())
+            .first()
+        )
+        if recent_active and (datetime.utcnow() - recent_active.created_at).total_seconds() < 60:
+            remaining_cooldown = int(60 - (datetime.utcnow() - recent_active.created_at).total_seconds())
+            raise HTTPException(
+                status_code=429,
+                detail=f"Please wait {max(1, remaining_cooldown)} seconds before requesting a new verification code.",
+            )
+
+        # 4. Verify contact matches reservation guest_phone or guest_email strictly
         norm_input_phone = normalize_phone(clean_contact)
         norm_res_phone = normalize_phone(res.guest_phone)
         norm_input_email = normalize_email(clean_contact)
         norm_res_email = normalize_email(res.guest_email)
 
-        phone_matched = norm_input_phone and norm_res_phone and (norm_input_phone[-7:] == norm_res_phone[-7:])
-        email_matched = norm_input_email and norm_res_email and (norm_input_email == norm_res_email)
+        phone_matched = False
+        if norm_input_phone and norm_res_phone:
+            if norm_input_phone == norm_res_phone:
+                phone_matched = True
+            else:
+                in_digits = re.sub(r"[^\d]", "", norm_input_phone)
+                res_digits = re.sub(r"[^\d]", "", norm_res_phone)
+                if len(in_digits) >= 10 and len(res_digits) >= 10 and in_digits[-10:] == res_digits[-10:]:
+                    phone_matched = True
+
+        email_matched = bool(norm_input_email and norm_res_email and (norm_input_email == norm_res_email))
 
         if not (phone_matched or email_matched):
             db.add(GuestAccessAudit(
@@ -104,9 +141,9 @@ class GuestSelfService:
                 detail="No booking found matching the provided reference and contact details.",
             )
 
-        # 4. Generate 6-digit cryptographic OTP
+        # 5. Generate 6-digit cryptographic OTP bound to reference_id with HMAC
         otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
-        token_hash = hashlib.sha256(otp_code.encode("utf-8")).hexdigest()
+        token_hash = compute_otp_hmac(clean_ref, otp_code)
 
         target_type = "EMAIL" if email_matched else "PHONE"
         target_val = res.guest_email if email_matched else res.guest_phone
@@ -228,9 +265,12 @@ class GuestSelfService:
                 detail="Too many invalid verification attempts. For your security, this code has been deactivated. Please request a new code.",
             )
 
-        # 3. Verify SHA-256 hash
-        input_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
-        if input_hash != verification.token_hash:
+        # 3. Verify HMAC hash using constant-time comparison
+        expected_hmac = compute_otp_hmac(clean_ref, clean_otp)
+        legacy_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
+
+        hash_matches = secrets.compare_digest(expected_hmac, verification.token_hash) or secrets.compare_digest(legacy_hash, verification.token_hash)
+        if not hash_matches:
             db.add(GuestAccessAudit(
                 reference_id=clean_ref,
                 reservation_id=verification.reservation_id,
@@ -241,7 +281,7 @@ class GuestSelfService:
                 details=f"Incorrect OTP entered (Attempt {verification.attempts}/{verification.max_attempts})",
             ))
             db.commit()
-            remaining = verification.max_attempts - verification.attempts
+            remaining = max(0, verification.max_attempts - verification.attempts)
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid verification code. {remaining} attempt(s) remaining.",
@@ -341,12 +381,16 @@ class GuestSelfService:
         target_time = req.reservation_time or res.reservation_time
         target_count = req.guest_count if req.guest_count is not None else res.guest_count
 
-        # Validate operating hours
+        # Validate operating hours (handling standard daytime and overnight schedules)
         if target_time:
             open_t = outlet.opening_time or "12:00"
             close_t = outlet.closing_time or "23:30"
-            # Basic validation
-            if target_time < open_t and target_time > close_t:
+            if open_t <= close_t:
+                is_open = open_t <= target_time <= close_t
+            else:
+                # Overnight operations (e.g. 18:00 to 02:00)
+                is_open = target_time >= open_t or target_time <= close_t
+            if not is_open:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Selected time {target_time} is outside operating hours ({open_t} to {close_t}).",
@@ -379,6 +423,7 @@ class GuestSelfService:
             reservation_id=res.id,
             reference_id=res.reference_id,
             requested_by="GUEST",
+            old_status=res.status,
             old_date=res.reservation_date,
             new_date=target_date,
             old_time=res.reservation_time,

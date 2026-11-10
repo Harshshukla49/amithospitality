@@ -15,6 +15,7 @@ class NotificationLog(Base):
     event_type = Column(String(50), nullable=False)  # CREATED, ACCEPTED, CANCELLED, REJECTED, LEAD_ACK
     idempotency_key = Column(String(255), unique=True, index=True, nullable=False)
     status = Column(String(20), default="SENT")  # SENT, SIMULATED, FAILED, DUPLICATE
+    attempts = Column(Integer, default=1, nullable=True)
     error_message = Column(Text, nullable=True)
     environment = Column(String(10), default="DEMO")
     created_at = Column(DateTime, default=datetime.utcnow)

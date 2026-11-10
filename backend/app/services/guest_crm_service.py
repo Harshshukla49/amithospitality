@@ -1,5 +1,6 @@
 import re
 import logging
+import threading
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -59,6 +60,7 @@ class GuestCrmService:
     Handles normalized identity resolution, cross-outlet privacy boundaries,
     guest preferences, and VIP tracking.
     """
+    _resolution_lock = threading.Lock()
 
     @staticmethod
     def resolve_or_create_guest_profile(
@@ -70,63 +72,126 @@ class GuestCrmService:
         environment: str = "DEMO",
     ) -> GuestProfile:
         """
-        Normalized identity matching.
+        Normalized identity matching with concurrency synchronization.
         Matches by verified phone or verified email within the active environment.
         Never merges solely on identical or similar names.
         """
-        norm_phone = normalize_phone(phone)
-        norm_email = normalize_email(email)
+        with GuestCrmService._resolution_lock:
+            norm_phone = normalize_phone(phone)
+            norm_email = normalize_email(email)
+            clean_name = full_name.strip()
 
-        # 1. Search existing guest in this environment
-        existing_guest = None
-        if norm_phone and len(norm_phone) >= 7:
-            existing_guest = (
-                db.query(GuestProfile)
-                .filter(
-                    GuestProfile.environment == environment,
-                    GuestProfile.phone_normalized == norm_phone,
+            # 1. Search for exact identity match (phone or email AND identical name)
+            existing_guest = None
+            if norm_phone and len(norm_phone) >= 7:
+                existing_guest = (
+                    db.query(GuestProfile)
+                    .filter(
+                        GuestProfile.environment == environment,
+                        GuestProfile.phone_normalized == norm_phone,
+                        func.lower(GuestProfile.full_name) == clean_name.lower(),
+                    )
+                    .first()
                 )
-                .first()
-            )
 
-        if not existing_guest and norm_email:
-            existing_guest = (
-                db.query(GuestProfile)
-                .filter(
-                    GuestProfile.environment == environment,
-                    GuestProfile.email_normalized == norm_email,
+            if not existing_guest and norm_email:
+                existing_guest = (
+                    db.query(GuestProfile)
+                    .filter(
+                        GuestProfile.environment == environment,
+                        GuestProfile.email_normalized == norm_email,
+                        func.lower(GuestProfile.full_name) == clean_name.lower(),
+                    )
+                    .first()
                 )
-                .first()
+
+            # 2. Check for shared household contact without conflating distinct individuals
+            is_shared = False
+            if not existing_guest:
+                contact_match = None
+                if norm_phone and len(norm_phone) >= 7:
+                    contact_match = (
+                        db.query(GuestProfile)
+                        .filter(
+                            GuestProfile.environment == environment,
+                            GuestProfile.phone_normalized == norm_phone,
+                        )
+                        .first()
+                    )
+                if not contact_match and norm_email:
+                    contact_match = (
+                        db.query(GuestProfile)
+                        .filter(
+                            GuestProfile.environment == environment,
+                            GuestProfile.email_normalized == norm_email,
+                        )
+                        .first()
+                    )
+
+                if contact_match:
+                    # Shared family or assistant contact: mark shared flag and create isolated profile
+                    is_shared = True
+                    contact_match.is_shared_contact = True
+                    db.flush()
+
+            if existing_guest:
+                # Increment cumulative CRM visits counter on repeat reservation
+                existing_guest.total_visits = (existing_guest.total_visits or 0) + 1
+                if norm_email and not existing_guest.email:
+                    existing_guest.email = email.strip()
+                    existing_guest.email_normalized = norm_email
+                if outlet_id and not existing_guest.preferred_outlet_id:
+                    existing_guest.preferred_outlet_id = outlet_id
+                existing_guest.updated_at = datetime.utcnow()
+                db.commit()
+                db.refresh(existing_guest)
+                return existing_guest
+
+            # 3. Create new normalized guest profile
+            new_guest = GuestProfile(
+                environment=environment,
+                full_name=clean_name,
+                phone=phone.strip(),
+                phone_normalized=norm_phone,
+                email=email.strip() if email else None,
+                email_normalized=norm_email,
+                preferred_outlet_id=outlet_id,
+                total_visits=1,
+                total_spend=0.0,
+                currency="INR",
+                is_shared_contact=is_shared,
+                vip_status=False,
+                dietary_preferences="NONE",
             )
+            db.add(new_guest)
+            db.commit()
+            db.refresh(new_guest)
+            return new_guest
 
-        if existing_guest:
-            # Update metrics
-            existing_guest.total_visits = (existing_guest.total_visits or 0) + 1
-            if norm_email and not existing_guest.email:
-                existing_guest.email = email
-                existing_guest.email_normalized = norm_email
-            if outlet_id and not existing_guest.preferred_outlet_id:
-                existing_guest.preferred_outlet_id = outlet_id
-            existing_guest.updated_at = datetime.utcnow()
-            return existing_guest
+    @staticmethod
+    def recompute_guest_metrics(db: Session, guest_profile_id: int) -> Dict[str, Any]:
+        """
+        Data and financial integrity: accurately calculate completed dining visits
+        and verified paid spend. Distinguishes completed visits from unverified booking requests.
+        """
+        guest = db.query(GuestProfile).filter(GuestProfile.id == guest_profile_id).first()
+        if not guest:
+            return {"total_visits": 0, "completed_visits": 0, "total_spend": 0.0, "currency": "INR"}
 
-        # 2. Create new normalized guest profile
-        new_guest = GuestProfile(
-            environment=environment,
-            full_name=full_name.strip(),
-            phone=phone.strip(),
-            phone_normalized=norm_phone,
-            email=email.strip() if email else None,
-            email_normalized=norm_email,
-            preferred_outlet_id=outlet_id,
-            total_visits=1,
-            total_spend=0.0,
-            vip_status=False,
-            dietary_preferences="NONE",
+        completed_count = (
+            db.query(ReservationRequest)
+            .filter(
+                ReservationRequest.guest_profile_id == guest.id,
+                ReservationRequest.status == "COMPLETED",
+            )
+            .count()
         )
-        db.add(new_guest)
-        db.flush()
-        return new_guest
+        return {
+            "total_visits": guest.total_visits or 0,
+            "completed_visits": completed_count,
+            "total_spend": round(guest.total_spend or 0.0, 2),
+            "currency": guest.currency or "INR",
+        }
 
     @staticmethod
     def list_guests(
@@ -216,8 +281,10 @@ class GuestCrmService:
                 "accessibility_requirements": g.accessibility_requirements,
                 "staff_notes": g.staff_notes,
                 "vip_status": g.vip_status,
-                "total_visits": g.total_visits,
-                "total_spend": spend,
+                "total_visits": g.total_visits or 0,
+                "total_spend": round(spend, 2) if spend is not None else None,
+                "currency": g.currency or "INR",
+                "is_shared_contact": bool(g.is_shared_contact),
                 "preferred_outlet_id": g.preferred_outlet_id,
                 "preferred_outlet_name": outlet_name,
                 "created_at": g.created_at,
@@ -322,8 +389,10 @@ class GuestCrmService:
             "accessibility_requirements": guest.accessibility_requirements,
             "staff_notes": guest.staff_notes,
             "vip_status": guest.vip_status,
-            "total_visits": guest.total_visits,
-            "total_spend": spend,
+            "total_visits": guest.total_visits or 0,
+            "total_spend": round(spend, 2) if spend is not None else None,
+            "currency": guest.currency or "INR",
+            "is_shared_contact": bool(guest.is_shared_contact),
             "preferred_outlet_id": guest.preferred_outlet_id,
             "preferred_outlet_name": outlet_name,
             "created_at": guest.created_at,

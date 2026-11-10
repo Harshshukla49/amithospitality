@@ -29,6 +29,7 @@ TEST_SUITES = [
     ("Phase 17 — External Enterprise Integrations (Gemini, WhatsApp, Twilio, SendGrid, Redis, Sentry)", "test_phase17_external_integrations.py"),
     ("Phase 19 — Live Outlets API, Multi-Outlet RBAC & Reservation Notification System", "test_phase19_notifications_outlets.py"),
     ("Phase 20 — Unified Guest CRM & Secure Self-Service Experience", "test_phase20_guest_crm_self_service.py"),
+    ("Phase 20.1 — Security, Data Integrity & Reliability Audit", "test_phase20_1_security_audit.py"),
 ]
 
 def run_master_regression_suite():
@@ -65,7 +66,10 @@ def run_master_regression_suite():
         else:
             print(f"    STATUS: FAILED ({duration:.2f}s)", flush=True)
             print("\n    --- ERROR LOG ---", flush=True)
-            print(proc.stderr or proc.stdout, flush=True)
+            if proc.stderr:
+                print("STDERR:\n" + proc.stderr, flush=True)
+            if proc.stdout:
+                print("STDOUT:\n" + proc.stdout, flush=True)
             print("    -----------------\n", flush=True)
             results.append((title, False, duration, proc.stderr or proc.stdout))
 

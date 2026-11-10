@@ -131,17 +131,32 @@ class NotificationService:
                 if existing.status in ("SENT", "SIMULATED"):
                     self.record_sent_key(idempotency_key)
                     return False
-                elif existing.status == "CLAIMED":
-                    # If claimed within last 60 seconds by another worker, do not duplicate
-                    if existing.created_at and (datetime.utcnow() - existing.created_at).total_seconds() < 60:
+                elif existing.status in ("CLAIMED", "FAILED"):
+                    # Check maximum retry threshold (max 3 retries)
+                    current_attempts = getattr(existing, "attempts", 1) or 1
+                    if current_attempts >= 3:
+                        existing.status = "FAILED_PERMANENT"
+                        existing.error_message = f"Max delivery retries ({current_attempts}) exceeded."
+                        db.commit()
+                        logger.warning(f"Notification {idempotency_key} reached permanent failure threshold.")
                         return False
-                    # Stale claim (> 60s), allow reclaim
-                    existing.status = "CLAIMED"
-                    existing.created_at = datetime.utcnow()
-                    db.commit()
-                    return True
-                elif existing.status == "FAILED":
-                    # Allow safe retry for failed notifications
+
+                    # For CLAIMED records, enforce worker timeout backoff (min 30s)
+                    if existing.status == "CLAIMED":
+                        backoff_seconds = min(300, 30 * (2 ** (current_attempts - 1)))
+                        age = (datetime.utcnow() - existing.created_at).total_seconds() if existing.created_at else 999
+                        if age < backoff_seconds:
+                            # Still within active worker lease window
+                            return False
+                    elif existing.status == "FAILED" and current_attempts > 1:
+                        # On subsequent retries after first failure, apply exponential backoff
+                        backoff_seconds = min(300, 30 * (2 ** (current_attempts - 1)))
+                        age = (datetime.utcnow() - existing.created_at).total_seconds() if existing.created_at else 999
+                        if age < backoff_seconds:
+                            return False
+
+                    # Allow controlled retry/reclaim
+                    existing.attempts = current_attempts + 1
                     existing.status = "CLAIMED"
                     existing.created_at = datetime.utcnow()
                     db.commit()
@@ -158,6 +173,7 @@ class NotificationService:
                 event_type=event_type,
                 idempotency_key=idempotency_key,
                 status="CLAIMED",
+                attempts=1,
                 environment=environment,
             )
             db.add(claim_log)
@@ -174,6 +190,43 @@ class NotificationService:
             return not self.is_duplicate(idempotency_key)
         finally:
             db.close()
+
+    def recover_stale_claims(self, max_age_seconds: int = 180) -> int:
+        """
+        Server restart / crash recovery: safely reset abandoned 'CLAIMED' notifications
+        to either 'FAILED' (for retry) or 'FAILED_PERMANENT' (if retry limit reached).
+        """
+        from app.database import SessionLocal
+        from app.models.notification import NotificationLog
+        from datetime import timedelta
+
+        db = SessionLocal()
+        recovered_count = 0
+        try:
+            cutoff = datetime.utcnow() - timedelta(seconds=max_age_seconds)
+            stale_records = db.query(NotificationLog).filter(
+                NotificationLog.status == "CLAIMED",
+                NotificationLog.created_at < cutoff,
+            ).all()
+
+            for rec in stale_records:
+                rec.attempts = (rec.attempts or 1)
+                if rec.attempts >= 3:
+                    rec.status = "FAILED_PERMANENT"
+                    rec.error_message = "Stale claim timeout: max retry attempts exceeded."
+                else:
+                    rec.status = "FAILED"
+                    rec.error_message = "Worker interruption timeout: reclaimed for retry."
+                recovered_count += 1
+            if recovered_count > 0:
+                db.commit()
+                logger.info(f"Notification crash recovery: reclaimed {recovered_count} abandoned notification claims.")
+        except Exception as ex:
+            db.rollback()
+            logger.warning(f"Error during stale notification recovery: {ex}")
+        finally:
+            db.close()
+        return recovered_count
 
     def update_claimed_notification(
         self,

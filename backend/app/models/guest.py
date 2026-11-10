@@ -36,8 +36,10 @@ class GuestProfile(Base):
 
     staff_notes = Column(Text, nullable=True)
     vip_status = Column(Boolean, default=False, index=True)
-    total_visits = Column(Integer, default=1)
+    total_visits = Column(Integer, default=0)
     total_spend = Column(Float, default=0.0)
+    currency = Column(String(10), default="INR", nullable=True)
+    is_shared_contact = Column(Boolean, default=False, nullable=True)
     preferred_outlet_id = Column(Integer, ForeignKey("outlets.id"), nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -102,6 +104,7 @@ class ReservationModificationRequest(Base):
     reference_id = Column(String(50), nullable=False, index=True)
     requested_by = Column(String(50), default="GUEST")  # GUEST or STAFF
 
+    old_status = Column(String(30), nullable=True)
     old_date = Column(String(20), nullable=False)
     new_date = Column(String(20), nullable=False)
     old_time = Column(String(20), nullable=False)
