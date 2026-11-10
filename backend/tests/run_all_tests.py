@@ -47,6 +47,8 @@ def run_master_regression_suite():
             [sys.executable, script_path],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=os.path.abspath(os.path.join(tests_dir, "..")),
         )
         duration = time.time() - start_t

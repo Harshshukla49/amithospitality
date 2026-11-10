@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi import HTTPException
 
+import app.database
 from app.database import Base
 from app.models.user import User
 from app.models.outlet import Outlet
@@ -23,6 +24,7 @@ from app.models.reservation import ReservationRequest, generate_reservation_ref
 from app.models.lead import Lead, generate_lead_ref
 from app.models.token import RevokedToken
 from app.models.audit import EnvironmentSetting
+from app.models.notification import NotificationLog
 from app.config import settings
 
 from app.utils.security import (
@@ -80,6 +82,8 @@ def setup_phase11_db():
     )
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    app.database.SessionLocal = SessionLocal
+    app.database.engine = engine
     db = SessionLocal()
     return db, SessionLocal
 
@@ -436,7 +440,7 @@ def test_phase11_enterprise_qa():
     # 9. Database Backup, Integrity & Recovery Engine
     # --------------------------------------------------------------------------
     print("\n>>> 9. Verifying Database Backup, Integrity & Recovery Engine...")
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
         # Create a sample SQLite db with tables and rows
         source_db_file = os.path.join(tmp_dir, "source_live.db")
         src_engine = create_engine(f"sqlite:///{source_db_file}", echo=False)

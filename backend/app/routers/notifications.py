@@ -126,14 +126,27 @@ def list_notification_logs(
 ):
     """
     Retrieve audit history of dispatched (and simulated) transactional notifications.
+    Strictly isolated by outlet authorization for Managers and Staff.
     """
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
     query = db.query(NotificationLog).order_by(NotificationLog.created_at.desc())
     if entity_type:
         query = query.filter(NotificationLog.entity_type == entity_type)
+
+    # Multi-outlet tenant isolation: Managers and Staff only see notifications for their assigned outlet
+    if current_user and getattr(current_user, "role", None) in ("MANAGER", "STAFF"):
+        if getattr(current_user, "outlet_id", None):
+            query = query.filter(NotificationLog.outlet_id == current_user.outlet_id)
+        else:
+            query = query.filter(NotificationLog.outlet_id.is_(None))
+
     logs = query.limit(limit).all()
     return [
         {
             "id": l.id,
+            "outlet_id": l.outlet_id,
             "entity_type": l.entity_type,
             "entity_id": l.entity_id,
             "reference_id": l.reference_id,

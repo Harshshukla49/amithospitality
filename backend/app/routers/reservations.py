@@ -150,6 +150,7 @@ def create_reservation(
             "status": new_res.status,
             "environment": active_env,
             "notes": notes,
+            "outlet_id": outlet.id,
         }
         if background_tasks:
             background_tasks.add_task(notification_service.notify_reservation_lifecycle, **notification_payload)
@@ -334,6 +335,7 @@ def update_reservation_status(
         "status": res.status,
         "environment": res.environment,
         "notes": status_update.internal_notes,
+        "outlet_id": res.outlet_id,
     }
     if background_tasks:
         background_tasks.add_task(notification_service.notify_reservation_lifecycle, **status_notification_payload)

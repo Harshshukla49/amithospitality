@@ -119,11 +119,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('amit_access_token') : null;
+    if (token) {
+      try {
+        await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch {
+        // Quiet failover if backend disconnected
+      }
+    }
     setUser(null);
-    localStorage.setItem('amit_concierge_logged_out', 'true');
-    localStorage.removeItem('amit_concierge_user');
-    localStorage.removeItem('amit_access_token');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('amit_concierge_logged_out', 'true');
+      localStorage.removeItem('amit_concierge_user');
+      localStorage.removeItem('amit_access_token');
+      localStorage.removeItem('amit_refresh_token');
+    }
   };
 
   const switchRole = (role: UserRole) => {
