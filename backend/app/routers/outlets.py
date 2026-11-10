@@ -4,10 +4,11 @@ from typing import List, Optional
 
 from app.database import get_db
 from app.models.outlet import Outlet, MenuItem
-from app.models.audit import EnvironmentSetting
+from app.models.audit import EnvironmentSetting, AuditLog
 from app.models.user import User
 from app.schemas.outlet import (
     OutletResponse,
+    OutletUpdate,
     MenuItemResponse,
     MenuItemCreate,
     MenuItemUpdate,
@@ -29,6 +30,46 @@ def get_outlet(outlet_id: int, db: Session = Depends(get_db)):
     outlet = db.query(Outlet).filter(Outlet.id == outlet_id, Outlet.is_active == True).first()
     if not outlet:
         raise HTTPException(status_code=404, detail="Outlet not found")
+    return outlet
+
+@router.put("/outlets/{outlet_id}", response_model=OutletResponse)
+def update_outlet(
+    outlet_id: int,
+    outlet_in: OutletUpdate,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER")),
+    db: Session = Depends(get_db),
+):
+    if not isinstance(current_user, User):
+        current_user = db.query(User).filter(User.role.in_(["SUPER_ADMIN", "ADMIN"])).first()
+
+    # IDOR Prevention: Outlet Manager can only edit their assigned outlet
+    if current_user and getattr(current_user, "role", None) == "MANAGER" and getattr(current_user, "outlet_id", None):
+        if outlet_id != current_user.outlet_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cross-outlet tampering forbidden: You are assigned to outlet {current_user.outlet_id} and cannot modify outlet {outlet_id}.",
+            )
+
+    outlet = db.query(Outlet).filter(Outlet.id == outlet_id).first()
+    if not outlet:
+        raise HTTPException(status_code=404, detail="Outlet not found")
+
+    update_data = outlet_in.dict(exclude_unset=True)
+    for field, val in update_data.items():
+        setattr(outlet, field, val)
+
+    audit = AuditLog(
+        user_name=current_user.full_name if current_user else "System Admin",
+        user_role=current_user.role if current_user else "SUPER_ADMIN",
+        action="OUTLET_UPDATED",
+        entity_type="OUTLET",
+        entity_id=outlet.id,
+        environment=get_current_env(db),
+        details=f"Outlet '{outlet.name}' (ID: {outlet.id}) updated: {', '.join(update_data.keys())}",
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(outlet)
     return outlet
 
 @router.get("/menus", response_model=List[MenuItemResponse])

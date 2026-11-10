@@ -8,6 +8,7 @@ from app.models.conversation import Customer, Conversation, Message
 from app.models.audit import EnvironmentSetting, AuditLog
 from app.models.ai_config import AIConfiguration
 from app.models.token import RevokedToken
+from app.models.notification import NotificationLog
 
 __all__ = [
     "Base",
@@ -31,4 +32,5 @@ __all__ = [
     "EnvironmentSetting",
     "AuditLog",
     "AIConfiguration",
+    "NotificationLog",
 ]

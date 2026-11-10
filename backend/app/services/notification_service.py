@@ -499,4 +499,212 @@ class NotificationService:
         except Exception as e:
             return {"name": "Twilio SMS Service", "status": "DISCONNECTED", "connected": False, "error": str(e)}
 
+    # ==========================================
+    # RESERVATION & LEAD LIFECYCLE DISPATCH
+    # ==========================================
+
+    def notify_reservation_lifecycle(
+        self,
+        reservation_id: int,
+        reference_id: str,
+        guest_name: str,
+        guest_email: Optional[str],
+        guest_phone: str,
+        outlet_name: str,
+        date_str: str,
+        time_str: str,
+        guest_count: int,
+        status: str,
+        environment: str = "DEMO",
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Asynchronously handles reservation lifecycle notifications (Email & SMS).
+        Provides idempotency, delivery logging into notification_logs, and graceful
+        unconfigured/sandbox simulation without blocking callers.
+        """
+        from app.database import SessionLocal
+        from app.models.notification import NotificationLog
+
+        is_demo = (environment == "DEMO")
+        idempotency_key_base = f"res_{reference_id}_{status.upper()}"
+        results = {"email": None, "sms": None}
+
+        # 1. Email Notification
+        if guest_email:
+            email_key = f"{idempotency_key_base}_email"
+            if not self.is_duplicate(email_key):
+                if status.upper() == "NEW":
+                    subject = f"Reservation Request Received: {reference_id} – Amit Hospitality"
+                    html_body = self.build_reservation_request_email(
+                        ref_id=reference_id,
+                        guest_name=guest_name,
+                        outlet_name=outlet_name,
+                        date_str=date_str,
+                        time_str=time_str,
+                        guests_count=guest_count,
+                        is_demo=is_demo,
+                    )
+                else:
+                    subject = f"Reservation Update: {reference_id} ({status.upper()}) – {outlet_name}"
+                    html_body = self.build_reservation_status_email(
+                        ref_id=reference_id,
+                        guest_name=guest_name,
+                        outlet_name=outlet_name,
+                        status=status,
+                        notes=notes,
+                        is_demo=is_demo,
+                    )
+
+                if self.is_email_configured:
+                    res = self.send_email(to_email=guest_email, subject=subject, html_content=html_body, idempotency_key=email_key)
+                    email_status = "SENT" if res.get("sent") else "FAILED"
+                    err_msg = res.get("error")
+                else:
+                    self.record_sent_key(email_key)
+                    email_status = "SIMULATED"
+                    err_msg = None
+                    res = {"sent": True, "simulated": True, "message": "Email simulation logged (unconfigured credentials)"}
+
+                results["email"] = res
+
+                # Log into NotificationLog table
+                db = SessionLocal()
+                try:
+                    log_entry = NotificationLog(
+                        entity_type="RESERVATION",
+                        entity_id=reservation_id,
+                        reference_id=reference_id,
+                        channel="EMAIL",
+                        recipient=guest_email,
+                        event_type=f"RESERVATION_{status.upper()}",
+                        idempotency_key=email_key,
+                        status=email_status,
+                        error_message=err_msg,
+                        environment=environment,
+                    )
+                    db.add(log_entry)
+                    db.commit()
+                except Exception as ex:
+                    db.rollback()
+                    logger.warning(f"Failed to record email NotificationLog: {ex}")
+                finally:
+                    db.close()
+
+        # 2. SMS Notification
+        if guest_phone:
+            sms_key = f"{idempotency_key_base}_sms"
+            if not self.is_duplicate(sms_key):
+                if status.upper() == "NEW":
+                    sms_text = f"Amit Hospitality: Request {reference_id} for {outlet_name} on {date_str} at {time_str} received. Our Concierge is confirming table availability."
+                elif status.upper() == "ACCEPTED":
+                    sms_text = f"Amit Hospitality: Great news! Your reservation {reference_id} for {outlet_name} on {date_str} at {time_str} is CONFIRMED. We look forward to welcoming you."
+                elif status.upper() == "CANCELLED":
+                    sms_text = f"Amit Hospitality: Your reservation {reference_id} for {outlet_name} has been CANCELLED as requested."
+                else:
+                    sms_text = f"Amit Hospitality: Reservation {reference_id} for {outlet_name} status updated to {status.upper()}."
+
+                if is_demo:
+                    sms_text = f"[DEMO] {sms_text}"
+
+                if self.is_sms_configured:
+                    res = self.send_sms(to_phone=guest_phone, message_text=sms_text, idempotency_key=sms_key)
+                    sms_status = "SENT" if res.get("sent") else "FAILED"
+                    err_msg = res.get("error")
+                else:
+                    self.record_sent_key(sms_key)
+                    sms_status = "SIMULATED"
+                    err_msg = None
+                    res = {"sent": True, "simulated": True, "message": "SMS simulation logged (unconfigured credentials)"}
+
+                results["sms"] = res
+
+                # Log into NotificationLog table
+                db = SessionLocal()
+                try:
+                    log_entry = NotificationLog(
+                        entity_type="RESERVATION",
+                        entity_id=reservation_id,
+                        reference_id=reference_id,
+                        channel="SMS",
+                        recipient=guest_phone,
+                        event_type=f"RESERVATION_{status.upper()}",
+                        idempotency_key=sms_key,
+                        status=sms_status,
+                        error_message=err_msg,
+                        environment=environment,
+                    )
+                    db.add(log_entry)
+                    db.commit()
+                except Exception as ex:
+                    db.rollback()
+                    logger.warning(f"Failed to record SMS NotificationLog: {ex}")
+                finally:
+                    db.close()
+
+        return results
+
+    def notify_lead_lifecycle(
+        self,
+        lead_id: int,
+        reference_id: str,
+        guest_name: str,
+        guest_email: str,
+        guest_phone: str,
+        outlet_name: str,
+        enquiry_type: str,
+        environment: str = "DEMO",
+    ) -> Dict[str, Any]:
+        from app.database import SessionLocal
+        from app.models.notification import NotificationLog
+
+        is_demo = (environment == "DEMO")
+        idempotency_key_base = f"lead_{reference_id}_CREATED"
+        results = {"email": None, "sms": None}
+
+        if guest_email:
+            email_key = f"{idempotency_key_base}_email"
+            if not self.is_duplicate(email_key):
+                subject = f"Inquiry Received: #{reference_id} – Amit Hospitality Events"
+                html_body = self.build_lead_acknowledgement_email(
+                    lead_id=reference_id,
+                    guest_name=guest_name,
+                    event_type=enquiry_type,
+                    outlet_name=outlet_name,
+                    is_demo=is_demo,
+                )
+                if self.is_email_configured:
+                    res = self.send_email(to_email=guest_email, subject=subject, html_content=html_body, idempotency_key=email_key)
+                    email_status = "SENT" if res.get("sent") else "FAILED"
+                    err_msg = res.get("error")
+                else:
+                    self.record_sent_key(email_key)
+                    email_status = "SIMULATED"
+                    err_msg = None
+                    res = {"sent": True, "simulated": True}
+
+                results["email"] = res
+                db = SessionLocal()
+                try:
+                    log_entry = NotificationLog(
+                        entity_type="LEAD",
+                        entity_id=lead_id,
+                        reference_id=reference_id,
+                        channel="EMAIL",
+                        recipient=guest_email,
+                        event_type="LEAD_CREATED",
+                        idempotency_key=email_key,
+                        status=email_status,
+                        error_message=err_msg,
+                        environment=environment,
+                    )
+                    db.add(log_entry)
+                    db.commit()
+                except Exception as ex:
+                    db.rollback()
+                finally:
+                    db.close()
+
+        return results
+
 notification_service = NotificationService()

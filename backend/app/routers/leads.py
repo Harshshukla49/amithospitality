@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional, Any
@@ -18,7 +18,7 @@ from app.schemas.lead import (
     LeadHistoryItem,
 )
 from app.utils.security import require_roles, get_current_user, get_current_user_optional
-from app.models.user import User
+from app.services.notification_service import notification_service
 
 router = APIRouter(prefix="/api/v1/leads", tags=["Event & Lead Management"])
 
@@ -27,7 +27,12 @@ def get_current_env(db: Session) -> str:
     return setting.active_environment if setting else "DEMO"
 
 @router.post("", response_model=LeadResponse)
-def create_lead(req: LeadCreate, current_user: Any = None, db: Session = Depends(get_db)):
+def create_lead(
+    req: LeadCreate,
+    current_user: Any = None,
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
     """
     Create a new private dining, banquet, or event lead inquiry.
     Supports submissions from customer chatbot, web drawer, or manual entry by staff.
@@ -93,6 +98,25 @@ def create_lead(req: LeadCreate, current_user: Any = None, db: Session = Depends
     db.add(audit)
     db.commit()
     db.refresh(new_lead)
+
+    # Dispatch lead acknowledgement notification
+    lead_notification_payload = {
+        "lead_id": new_lead.id,
+        "reference_id": new_lead.reference_id,
+        "guest_name": new_lead.name,
+        "guest_email": new_lead.email,
+        "guest_phone": new_lead.phone,
+        "outlet_name": outlet.name,
+        "enquiry_type": new_lead.enquiry_type,
+        "environment": active_env,
+    }
+    if background_tasks:
+        background_tasks.add_task(notification_service.notify_lead_lifecycle, **lead_notification_payload)
+    else:
+        try:
+            notification_service.notify_lead_lifecycle(**lead_notification_payload)
+        except Exception:
+            pass
 
     return new_lead
 

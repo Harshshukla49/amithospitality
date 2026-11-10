@@ -22,15 +22,16 @@ TEST_SUITES = [
     ("Phase 14 — Real HTTP Integration, RBAC, Multi-Outlet Isolation & Streaming CSV", "test_phase14_http_integration.py"),
     ("Phase 15 — Database Reliability, Atomic Transactions & 20-Worker Concurrency", "test_phase15_concurrency.py"),
     ("Phase 17 — External Enterprise Integrations (Gemini, WhatsApp, Twilio, SendGrid, Redis, Sentry)", "test_phase17_external_integrations.py"),
+    ("Phase 19 — Live Outlets API, Multi-Outlet RBAC & Reservation Notification System", "test_phase19_notifications_outlets.py"),
 ]
 
 def run_master_regression_suite():
-    print("=" * 80)
-    print("   AMIT AI CONCIERGE — MASTER END-TO-END REGRESSION VERIFICATION")
-    print("   Enterprise Hospitality Platform for Amit Hospitality")
-    print("=" * 80)
-    print(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Python Executable: {sys.executable}\n")
+    print("=" * 80, flush=True)
+    print("   AMIT AI CONCIERGE — MASTER END-TO-END REGRESSION VERIFICATION", flush=True)
+    print("   Enterprise Hospitality Platform for Amit Hospitality", flush=True)
+    print("=" * 80, flush=True)
+    print(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    print(f"Python Executable: {sys.executable}\n", flush=True)
 
     results = []
     total_start = time.time()
@@ -39,7 +40,7 @@ def run_master_regression_suite():
 
     for title, script_name in TEST_SUITES:
         script_path = os.path.join(tests_dir, script_name)
-        print(f"\n>>> Running: {title} ({script_name})")
+        print(f"\n>>> Running: {title} ({script_name})", flush=True)
         start_t = time.time()
         
         proc = subprocess.run(
@@ -51,13 +52,13 @@ def run_master_regression_suite():
         duration = time.time() - start_t
 
         if proc.returncode == 0:
-            print(f"    STATUS: PASSED ({duration:.2f}s)")
+            print(f"    STATUS: PASSED ({duration:.2f}s)", flush=True)
             results.append((title, True, duration, proc.stdout))
         else:
-            print(f"    STATUS: FAILED ({duration:.2f}s)")
-            print("\n    --- ERROR LOG ---")
-            print(proc.stderr or proc.stdout)
-            print("    -----------------\n")
+            print(f"    STATUS: FAILED ({duration:.2f}s)", flush=True)
+            print("\n    --- ERROR LOG ---", flush=True)
+            print(proc.stderr or proc.stdout, flush=True)
+            print("    -----------------\n", flush=True)
             results.append((title, False, duration, proc.stderr or proc.stdout))
 
     total_duration = time.time() - total_start

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { EnvironmentProvider, useEnvironment } from './context/EnvironmentContext';
 import { AuthProvider } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
@@ -6,7 +7,8 @@ import { Header } from './components/common/Header';
 import { DemoBanner } from './components/common/DemoBanner';
 import { SwitchEnvironmentModal } from './components/common/SwitchEnvironmentModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { Sidebar, AdminTab } from './components/admin/Sidebar';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { Sidebar } from './components/admin/Sidebar';
 import { ConciergePage } from './pages/customer/ConciergePage';
 import { DashboardPage } from './pages/admin/DashboardPage';
 import { KnowledgePage } from './pages/admin/KnowledgePage';
@@ -16,6 +18,9 @@ import { LeadsPage } from './pages/admin/LeadsPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
+import { LoginPage } from './pages/auth/LoginPage';
+import { NotFoundPage } from './pages/common/NotFoundPage';
+import { UnauthorizedPage } from './pages/common/UnauthorizedPage';
 import {
   INITIAL_RESERVATIONS,
   INITIAL_LEADS,
@@ -25,17 +30,36 @@ import { ReservationRequest, Lead, KnowledgeDocument, ReservationStatus, LeadSta
 import { fetchReservationsApi, updateReservationStatusApi } from './api/reservations';
 import { fetchLeadsApi, updateLeadStatusApi } from './api/leads';
 
-const MainLayout: React.FC = () => {
-  const { environment } = useEnvironment();
-  const [currentView, setCurrentView] = useState<'CUSTOMER' | 'ADMIN'>('CUSTOMER');
-  const [adminTab, setAdminTab] = useState<AdminTab>('DASHBOARD');
+interface AdminLayoutWrapperProps {
+  reservations: ReservationRequest[];
+  leads: Lead[];
+  children: React.ReactNode;
+}
 
-  // Shared application state across Concierge and Admin Console
+const AdminLayoutWrapper: React.FC<AdminLayoutWrapperProps> = ({ reservations, leads, children }) => {
+  return (
+    <div className="flex-1 flex overflow-hidden">
+      <Sidebar
+        reservationCount={
+          reservations.filter((r) => r.status === 'NEW' || r.status === 'PENDING').length
+        }
+        leadCount={leads.filter((l) => l.status === 'NEW').length}
+      />
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto">{children}</div>
+      </main>
+    </div>
+  );
+};
+
+export const AppContent: React.FC = () => {
+  const { environment } = useEnvironment();
+  const location = useLocation();
+
   const [reservations, setReservations] = useState<ReservationRequest[]>(INITIAL_RESERVATIONS);
   const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
   const [documents, setDocuments] = useState<KnowledgeDocument[]>(INITIAL_DOCUMENTS);
 
-  // Sync live reservations and leads from backend
   useEffect(() => {
     let isMounted = true;
     fetchReservationsApi({ environment })
@@ -127,72 +151,143 @@ const MainLayout: React.FC = () => {
     window.self !== window.top
   );
 
+  const isLoginPage = location.pathname === '/login';
+  const isUnauthorizedPage = location.pathname === '/unauthorized';
+
   return (
     <div className="min-h-screen flex flex-col bg-obsidian-950 text-slate-100 font-sans">
-      {/* Prominent Demo Mode Disclaimer Banner (Only in standalone app) */}
-      {!isEmbedded && <DemoBanner />}
+      {/* Prominent Demo Mode Disclaimer Banner */}
+      {!isEmbedded && !isLoginPage && <DemoBanner />}
 
-      {/* Global Luxury Navigation Header (Only in standalone app) */}
-      {!isEmbedded && <Header currentView={currentView} onViewChange={setCurrentView} />}
+      {/* Global Luxury Navigation Header */}
+      {!isEmbedded && !isLoginPage && !isUnauthorizedPage && <Header />}
 
-      {/* Main View Port */}
-      {currentView === 'CUSTOMER' ? (
-        <main className="flex-1">
-          <ConciergePage
-            onReservationCreated={handleAddReservation}
-            onLeadCreated={handleAddLead}
-            isEmbedded={isEmbedded}
-          />
-        </main>
-      ) : (
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar
-            activeTab={adminTab}
-            onTabChange={setAdminTab}
-            reservationCount={
-              reservations.filter((r) => r.status === 'NEW' || r.status === 'PENDING').length
-            }
-            leadCount={leads.filter((l) => l.status === 'NEW').length}
-          />
+      {/* Routes Viewport */}
+      <Routes>
+        {/* Customer Concierge Routes */}
+        <Route path="/" element={<Navigate to="/concierge" replace />} />
+        <Route
+          path="/concierge"
+          element={
+            <main className="flex-1">
+              <ConciergePage
+                onReservationCreated={handleAddReservation}
+                onLeadCreated={handleAddLead}
+                isEmbedded={isEmbedded}
+              />
+            </main>
+          }
+        />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
-              {adminTab === 'DASHBOARD' && (
+        {/* Auth Route */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+        {/* Protected Enterprise Admin Routes */}
+        <Route
+          path="/admin"
+          element={<Navigate to="/admin/dashboard" replace />}
+        />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
                 <DashboardPage
                   reservations={reservations}
                   leads={leads}
                   documents={documents}
-                  onNavigate={setAdminTab}
+                  onNavigate={() => {}}
                 />
-              )}
-              {adminTab === 'KNOWLEDGE' && (
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/knowledge"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
                 <KnowledgePage
                   documents={documents}
                   onAddDocument={handleAddDocument}
                   onDeleteDocument={handleDeleteDocument}
                 />
-              )}
-              {adminTab === 'OUTLETS' && <OutletsPage />}
-              {adminTab === 'RESERVATIONS' && (
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/outlets"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                <OutletsPage />
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reservations"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
                 <ReservationsPage
                   reservations={reservations}
                   onUpdateStatus={handleUpdateReservationStatus}
                 />
-              )}
-              {adminTab === 'LEADS' && (
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/leads"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
                 <LeadsPage
                   leads={leads}
                   onUpdateStatus={handleUpdateLeadStatus}
                   onAddLead={handleAddLead}
                 />
-              )}
-              {adminTab === 'ANALYTICS' && <AnalyticsPage />}
-              {adminTab === 'INTEGRATIONS' && <IntegrationsPage />}
-              {adminTab === 'SETTINGS' && <SettingsPage />}
-            </div>
-          </main>
-        </div>
-      )}
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                <AnalyticsPage />
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/integrations"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                <IntegrationsPage />
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                <SettingsPage />
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 404 Catch-All */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
 
       {/* Confirmation Modal for Environment Switching */}
       <SwitchEnvironmentModal />
@@ -206,7 +301,9 @@ export function App() {
       <AuthProvider>
         <EnvironmentProvider>
           <ChatProvider>
-            <MainLayout />
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
           </ChatProvider>
         </EnvironmentProvider>
       </AuthProvider>

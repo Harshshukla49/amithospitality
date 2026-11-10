@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import List, Optional, Any
@@ -18,7 +18,7 @@ from app.schemas.reservation import (
     ReservationHistoryItem,
 )
 from app.utils.security import require_roles, get_current_user, get_current_user_optional
-from app.models.user import User
+from app.services.notification_service import notification_service
 
 router = APIRouter(prefix="/api/v1/reservations", tags=["Reservations Workflow"])
 
@@ -27,7 +27,11 @@ def get_current_env(db: Session) -> str:
     return setting.active_environment if setting else "DEMO"
 
 @router.post("", response_model=ReservationResponse)
-def create_reservation(req: ReservationCreate, db: Session = Depends(get_db)):
+def create_reservation(
+    req: ReservationCreate,
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
     """
     Submit a customer table reservation request.
     Validates capacity against outlet threshold, generates unique reference ID,
@@ -131,6 +135,29 @@ def create_reservation(req: ReservationCreate, db: Session = Depends(get_db)):
         # Single atomic commit for reservation + history + audit
         db.commit()
         db.refresh(new_res)
+
+        # Dispatch background confirmation notification (Email & SMS)
+        notification_payload = {
+            "reservation_id": new_res.id,
+            "reference_id": new_res.reference_id,
+            "guest_name": new_res.guest_name,
+            "guest_email": new_res.guest_email,
+            "guest_phone": new_res.guest_phone,
+            "outlet_name": outlet.name,
+            "date_str": new_res.reservation_date,
+            "time_str": new_res.reservation_time,
+            "guest_count": new_res.guest_count,
+            "status": new_res.status,
+            "environment": active_env,
+            "notes": notes,
+        }
+        if background_tasks:
+            background_tasks.add_task(notification_service.notify_reservation_lifecycle, **notification_payload)
+        else:
+            try:
+                notification_service.notify_reservation_lifecycle(**notification_payload)
+            except Exception as notify_err:
+                pass
     except Exception as e:
         db.rollback()
         raise e
@@ -224,6 +251,7 @@ def get_reservation_detail(
 def update_reservation_status(
     res_id: int,
     status_update: ReservationStatusUpdate,
+    background_tasks: BackgroundTasks = None,
     current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
     db: Session = Depends(get_db),
 ):
@@ -291,6 +319,30 @@ def update_reservation_status(
 
     db.commit()
     db.refresh(res)
+
+    # Dispatch status change notification (Email & SMS)
+    status_notification_payload = {
+        "reservation_id": res.id,
+        "reference_id": res.reference_id,
+        "guest_name": res.guest_name,
+        "guest_email": res.guest_email,
+        "guest_phone": res.guest_phone,
+        "outlet_name": res.outlet_name,
+        "date_str": res.reservation_date,
+        "time_str": res.reservation_time,
+        "guest_count": res.guest_count,
+        "status": res.status,
+        "environment": res.environment,
+        "notes": status_update.internal_notes,
+    }
+    if background_tasks:
+        background_tasks.add_task(notification_service.notify_reservation_lifecycle, **status_notification_payload)
+    else:
+        try:
+            notification_service.notify_reservation_lifecycle(**status_notification_payload)
+        except Exception:
+            pass
+
     return res
 
 @router.get("/{res_id}/history", response_model=List[ReservationHistoryItem])

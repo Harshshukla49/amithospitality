@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, role?: UserRole) => void;
+  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   canManageEnvironment: boolean;
@@ -31,7 +32,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('amit_concierge_user');
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('amit_concierge_logged_out') === 'true') {
+      return null;
+    }
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('amit_concierge_user') : null;
     return saved ? JSON.parse(saved) : DEFAULT_ADMIN;
   });
 
@@ -74,12 +78,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       outletId: creds?.outletId,
     };
     setUser(newUser);
+    localStorage.removeItem('amit_concierge_logged_out');
     localStorage.setItem('amit_concierge_user', JSON.stringify(newUser));
     syncBackendToken(role, email);
   };
 
+  const loginWithCredentials = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        return { success: false, error: errJson.detail || 'Invalid email or password' };
+      }
+      const data = await res.json();
+      if (data.access_token) {
+        localStorage.setItem('amit_access_token', data.access_token);
+      }
+      if (data.refresh_token) {
+        localStorage.setItem('amit_refresh_token', data.refresh_token);
+      }
+      const role = data.role as UserRole;
+      const creds = ROLE_CREDENTIALS[role];
+      const authedUser: User = {
+        id: Date.now(),
+        email: data.email,
+        fullName: data.full_name || email.split('@')[0],
+        role: role,
+        outletId: creds?.outletId,
+      };
+      setUser(authedUser);
+      localStorage.removeItem('amit_concierge_logged_out');
+      localStorage.setItem('amit_concierge_user', JSON.stringify(authedUser));
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Connection failed to authentication server' };
+    }
+  };
+
   const logout = () => {
     setUser(null);
+    localStorage.setItem('amit_concierge_logged_out', 'true');
     localStorage.removeItem('amit_concierge_user');
     localStorage.removeItem('amit_access_token');
   };
@@ -108,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         login,
+        loginWithCredentials,
         logout,
         switchRole,
         canManageEnvironment,

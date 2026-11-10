@@ -1,23 +1,15 @@
-import logging
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, EmailStr
-from fastapi import APIRouter, HTTPException, Depends
-
-from app.services.notification_service import notification_service
-from app.routers.auth import get_current_user
-
-logger = logging.getLogger("notifications_router")
-router = APIRouter(prefix="/notifications", tags=["Notifications (Email & SMS)"])
-
 import re
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, EmailStr, field_validator
 from fastapi import APIRouter, HTTPException, Depends, status
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.services.notification_service import notification_service
 from app.utils.security import require_roles, get_current_user
 from app.models.user import User
+from app.models.notification import NotificationLog
 
 logger = logging.getLogger("notifications_router")
 router = APIRouter(prefix="/notifications", tags=["Notifications (Email & SMS)"])
@@ -124,3 +116,35 @@ async def test_sms_connectivity(
     Requires Super Admin or Admin role.
     """
     return notification_service.test_sms_connection()
+
+@router.get("/logs")
+def list_notification_logs(
+    limit: int = 50,
+    entity_type: Optional[str] = None,
+    current_user: User = Depends(require_roles("SUPER_ADMIN", "ADMIN", "MANAGER", "STAFF")),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve audit history of dispatched (and simulated) transactional notifications.
+    """
+    query = db.query(NotificationLog).order_by(NotificationLog.created_at.desc())
+    if entity_type:
+        query = query.filter(NotificationLog.entity_type == entity_type)
+    logs = query.limit(limit).all()
+    return [
+        {
+            "id": l.id,
+            "entity_type": l.entity_type,
+            "entity_id": l.entity_id,
+            "reference_id": l.reference_id,
+            "channel": l.channel,
+            "recipient": l.recipient,
+            "event_type": l.event_type,
+            "idempotency_key": l.idempotency_key,
+            "status": l.status,
+            "error_message": l.error_message,
+            "environment": l.environment,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+        }
+        for l in logs
+    ]

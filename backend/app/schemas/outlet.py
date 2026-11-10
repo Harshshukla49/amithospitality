@@ -33,6 +33,19 @@ class MenuItemResponse(MenuItemBase):
     class Config:
         from_attributes = True
 
+class OutletUpdate(BaseModel):
+    name: Optional[str] = None
+    outlet_type: Optional[str] = None
+    cuisine_type: Optional[str] = None
+    opening_time: Optional[str] = None
+    closing_time: Optional[str] = None
+    dress_code: Optional[str] = None
+    seating_capacity: Optional[int] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    is_popular: Optional[bool] = None
+    is_active: Optional[bool] = None
+
 class OutletResponse(BaseModel):
     id: int
     name: str

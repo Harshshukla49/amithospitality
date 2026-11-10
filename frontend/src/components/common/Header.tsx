@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Sparkles,
   Shield,
@@ -9,6 +10,7 @@ import {
   MessageSquare,
   LayoutDashboard,
   Check,
+  LogOut,
 } from 'lucide-react';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { useAuth } from '../../context/AuthContext';
@@ -16,15 +18,20 @@ import { useChat } from '../../context/ChatContext';
 import { UserRole } from '../../types';
 
 interface HeaderProps {
-  currentView: 'CUSTOMER' | 'ADMIN';
-  onViewChange: (view: 'CUSTOMER' | 'ADMIN') => void;
+  currentView?: 'CUSTOMER' | 'ADMIN';
+  onViewChange?: (view: 'CUSTOMER' | 'ADMIN') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
   const { environment, isDemo, openSwitchModal } = useEnvironment();
-  const { user, switchRole } = useAuth();
+  const { user, switchRole, logout, isAuthenticated } = useAuth();
   const { language, setLanguage } = useChat();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const activeView = currentView || (isAdminRoute ? 'ADMIN' : 'CUSTOMER');
 
   const roles: { role: UserRole; label: string }[] = [
     { role: 'SUPER_ADMIN', label: 'Super Admin (Full Access)' },
@@ -33,17 +40,34 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
     { role: 'STAFF', label: 'Front Desk Hostess' },
   ];
 
+  const handleNavigateView = (view: 'CUSTOMER' | 'ADMIN') => {
+    if (view === 'CUSTOMER') {
+      navigate('/concierge');
+    } else {
+      navigate('/admin/dashboard');
+    }
+    if (onViewChange) {
+      onViewChange(view);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    setProfileDropdownOpen(false);
+    navigate('/login');
+  };
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-gold-400/20 bg-obsidian-950/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand Logo & Name */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-gold-glow">
+        <Link to="/concierge" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-gold-glow group-hover:scale-105 transition-transform">
             <Sparkles className="w-5 h-5 text-obsidian-950" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-serif font-bold text-lg tracking-wide text-white">
+              <span className="font-serif font-bold text-lg tracking-wide text-white group-hover:text-gold-200 transition-colors">
                 AMIT HOSPITALITY
               </span>
               <span className="hidden sm:inline-block text-[10px] tracking-widest font-semibold px-1.5 py-0.5 rounded bg-gold-400/15 text-gold-400 border border-gold-400/30">
@@ -54,14 +78,14 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
               Luxury Dining & Private Event Experience Platform
             </p>
           </div>
-        </div>
+        </Link>
 
         {/* View Switcher: Customer Concierge vs Admin Console */}
         <div className="hidden sm:flex items-center p-1 rounded-xl bg-charcoal-900 border border-slate-700/80">
           <button
-            onClick={() => onViewChange('CUSTOMER')}
+            onClick={() => handleNavigateView('CUSTOMER')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
-              currentView === 'CUSTOMER'
+              activeView === 'CUSTOMER'
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 text-obsidian-950 font-semibold shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
@@ -70,9 +94,9 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
             <span>Customer Concierge</span>
           </button>
           <button
-            onClick={() => onViewChange('ADMIN')}
+            onClick={() => handleNavigateView('ADMIN')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
-              currentView === 'ADMIN'
+              activeView === 'ADMIN'
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 text-obsidian-950 font-semibold shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
@@ -129,28 +153,38 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
 
           {/* Profile / Role Selector Dropdown */}
           <div className="relative">
-            <button
-              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-charcoal-900 border border-slate-700/80 hover:border-gold-400/40 text-xs text-slate-200 transition"
-            >
-              <div className="w-5 h-5 rounded-full bg-gold-400/20 flex items-center justify-center text-gold-400 font-semibold">
-                {user?.fullName.charAt(0) || 'A'}
-              </div>
-              <span className="hidden md:inline-block max-w-[100px] truncate">{user?.fullName}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
+            {isAuthenticated && user ? (
+              <button
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-charcoal-900 border border-slate-700/80 hover:border-gold-400/40 text-xs text-slate-200 transition"
+              >
+                <div className="w-5 h-5 rounded-full bg-gold-400/20 flex items-center justify-center text-gold-400 font-semibold">
+                  {user.fullName.charAt(0) || 'A'}
+                </div>
+                <span className="hidden md:inline-block max-w-[100px] truncate">{user.fullName}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold-500/20 border border-gold-400/40 text-gold-300 text-xs font-semibold hover:bg-gold-500/30 transition"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </Link>
+            )}
 
-            {profileDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-xl glass-panel-elevated p-2 shadow-luxury border border-gold-400/30 text-xs z-50">
+            {profileDropdownOpen && user && (
+              <div className="absolute right-0 mt-2 w-64 rounded-xl glass-panel-elevated p-2 shadow-luxury border border-gold-400/30 text-xs z-50 animate-fade-in">
                 <div className="p-2 border-b border-slate-700 mb-1">
-                  <p className="font-semibold text-white">{user?.fullName}</p>
-                  <p className="text-[11px] text-gold-400 font-mono">{user?.role}</p>
-                  <p className="text-[11px] text-slate-400">{user?.email}</p>
+                  <p className="font-semibold text-white">{user.fullName}</p>
+                  <p className="text-[11px] text-gold-400 font-mono">{user.role}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
                 </div>
 
                 <div className="py-1">
                   <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                    Simulate Role (Demo Testing):
+                    Simulate Role (Testing):
                   </p>
                   {roles.map((r) => (
                     <button
@@ -160,39 +194,25 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
                         setProfileDropdownOpen(false);
                       }}
                       className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
-                        user?.role === r.role
+                        user.role === r.role
                           ? 'bg-gold-500/20 text-gold-300 font-medium'
                           : 'text-slate-300 hover:bg-charcoal-800'
                       }`}
                     >
                       <span>{r.label}</span>
-                      {user?.role === r.role && <Check className="w-3.5 h-3.5 text-gold-400" />}
+                      {user.role === r.role && <Check className="w-3.5 h-3.5 text-gold-400" />}
                     </button>
                   ))}
                 </div>
 
-                {/* Mobile View Switcher in Dropdown */}
-                <div className="sm:hidden pt-2 border-t border-slate-700 mt-1">
-                  <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                    Switch View:
-                  </p>
+                {/* Sign Out Button */}
+                <div className="pt-1 border-t border-slate-700 mt-1">
                   <button
-                    onClick={() => {
-                      onViewChange('CUSTOMER');
-                      setProfileDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 text-slate-300 hover:text-white"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-rose-400 hover:bg-rose-950/40 transition"
                   >
-                    Customer Concierge
-                  </button>
-                  <button
-                    onClick={() => {
-                      onViewChange('ADMIN');
-                      setProfileDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 text-slate-300 hover:text-white"
-                  >
-                    Admin Console
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
                   </button>
                 </div>
               </div>

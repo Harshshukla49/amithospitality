@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   BookOpen,
@@ -24,11 +25,22 @@ export type AdminTab =
   | 'SETTINGS';
 
 interface SidebarProps {
-  activeTab: AdminTab;
-  onTabChange: (tab: AdminTab) => void;
+  activeTab?: AdminTab;
+  onTabChange?: (tab: AdminTab) => void;
   reservationCount?: number;
   leadCount?: number;
 }
+
+const ROUTE_MAP: Record<AdminTab, string> = {
+  DASHBOARD: '/admin/dashboard',
+  KNOWLEDGE: '/admin/knowledge',
+  OUTLETS: '/admin/outlets',
+  RESERVATIONS: '/admin/reservations',
+  LEADS: '/admin/leads',
+  ANALYTICS: '/admin/analytics',
+  INTEGRATIONS: '/admin/integrations',
+  SETTINGS: '/admin/settings',
+};
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
@@ -37,51 +49,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
   leadCount = 0,
 }) => {
   const { environment, isDemo, openSwitchModal } = useEnvironment();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const navItems: { id: AdminTab; label: string; icon: React.ReactNode; badge?: number }[] = [
+  const navItems: { id: AdminTab; label: string; icon: React.ReactNode; path: string; badge?: number }[] = [
     {
       id: 'DASHBOARD',
       label: 'Overview & KPIs',
       icon: <LayoutDashboard className="w-4 h-4" />,
+      path: '/admin/dashboard',
     },
     {
       id: 'KNOWLEDGE',
       label: 'Knowledge Studio',
       icon: <BookOpen className="w-4 h-4" />,
+      path: '/admin/knowledge',
     },
     {
       id: 'OUTLETS',
       label: 'Outlets & Menus',
       icon: <UtensilsCrossed className="w-4 h-4" />,
+      path: '/admin/outlets',
     },
     {
       id: 'RESERVATIONS',
       label: 'Reservations',
       icon: <CalendarCheck className="w-4 h-4" />,
+      path: '/admin/reservations',
       badge: reservationCount,
     },
     {
       id: 'LEADS',
       label: 'Events & Leads',
       icon: <UsersRound className="w-4 h-4" />,
+      path: '/admin/leads',
       badge: leadCount,
     },
     {
       id: 'ANALYTICS',
       label: 'Analytics & Insights',
       icon: <BarChart3 className="w-4 h-4" />,
+      path: '/admin/analytics',
     },
     {
       id: 'INTEGRATIONS',
       label: 'Integrations Hub',
       icon: <Network className="w-4 h-4" />,
+      path: '/admin/integrations',
     },
     {
       id: 'SETTINGS',
       label: 'Settings & Audit Log',
       icon: <Sliders className="w-4 h-4" />,
+      path: '/admin/settings',
     },
   ];
+
+  const handleNavClick = (item: typeof navItems[0]) => {
+    navigate(item.path);
+    if (onTabChange) {
+      onTabChange(item.id);
+    }
+  };
 
   return (
     <aside className="w-64 shrink-0 flex flex-col justify-between p-4 glass-panel border-r border-gold-400/20 h-[calc(100vh-4rem)]">
@@ -112,11 +141,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation Links */}
         <nav className="space-y-1">
           {navItems.map((item) => {
-            const isActive = activeTab === item.id;
+            const isActive =
+              location.pathname === item.path ||
+              (item.id === 'DASHBOARD' && location.pathname === '/admin') ||
+              activeTab === item.id;
+
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => handleNavClick(item)}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition ${
                   isActive
                     ? 'bg-gradient-to-r from-gold-500 to-gold-600 text-obsidian-950 font-semibold shadow-gold-glow'
