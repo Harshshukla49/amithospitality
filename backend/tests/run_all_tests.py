@@ -3,6 +3,11 @@ import sys
 import time
 import subprocess
 
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -23,6 +28,7 @@ TEST_SUITES = [
     ("Phase 15 — Database Reliability, Atomic Transactions & 20-Worker Concurrency", "test_phase15_concurrency.py"),
     ("Phase 17 — External Enterprise Integrations (Gemini, WhatsApp, Twilio, SendGrid, Redis, Sentry)", "test_phase17_external_integrations.py"),
     ("Phase 19 — Live Outlets API, Multi-Outlet RBAC & Reservation Notification System", "test_phase19_notifications_outlets.py"),
+    ("Phase 20 — Unified Guest CRM & Secure Self-Service Experience", "test_phase20_guest_crm_self_service.py"),
 ]
 
 def run_master_regression_suite():

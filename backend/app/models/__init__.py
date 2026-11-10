@@ -9,6 +9,12 @@ from app.models.audit import EnvironmentSetting, AuditLog
 from app.models.ai_config import AIConfiguration
 from app.models.token import RevokedToken
 from app.models.notification import NotificationLog
+from app.models.guest import (
+    GuestProfile,
+    GuestVerification,
+    GuestAccessAudit,
+    ReservationModificationRequest,
+)
 
 __all__ = [
     "Base",
@@ -33,4 +39,8 @@ __all__ = [
     "AuditLog",
     "AIConfiguration",
     "NotificationLog",
+    "GuestProfile",
+    "GuestVerification",
+    "GuestAccessAudit",
+    "ReservationModificationRequest",
 ]

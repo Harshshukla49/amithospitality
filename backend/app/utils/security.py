@@ -78,7 +78,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     if "jti" not in to_encode:
         to_encode["jti"] = uuid.uuid4().hex
-    to_encode.update({"exp": expire, "type": "access"})
+    token_type = to_encode.get("type", "access")
+    to_encode.update({"exp": expire, "type": token_type})
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 def create_refresh_token(data: dict) -> str:

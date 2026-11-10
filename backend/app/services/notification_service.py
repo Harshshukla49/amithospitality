@@ -99,6 +99,111 @@ class NotificationService:
             self._clean_old_idempotency_keys()
             self._sent_idempotency_keys[idempotency_key] = time.time()
 
+    def atomic_claim_notification(
+        self,
+        idempotency_key: str,
+        entity_type: str,
+        entity_id: Optional[int],
+        reference_id: Optional[str],
+        channel: str,
+        recipient: str,
+        event_type: str,
+        environment: str = "DEMO",
+        outlet_id: Optional[int] = None,
+    ) -> bool:
+        """
+        Database-backed atomic claim to prevent concurrent duplicate delivery across multiple workers.
+        Atomically attempts to reserve the idempotency_key with status 'CLAIMED'.
+        Returns True if this worker won the reservation claim; False if already claimed or sent.
+        """
+        from app.database import SessionLocal
+        from app.models.notification import NotificationLog
+        from sqlalchemy.exc import IntegrityError
+
+        # Fast in-memory check
+        if idempotency_key in self._sent_idempotency_keys:
+            return False
+
+        db = SessionLocal()
+        try:
+            existing = db.query(NotificationLog).filter(NotificationLog.idempotency_key == idempotency_key).first()
+            if existing:
+                if existing.status in ("SENT", "SIMULATED"):
+                    self.record_sent_key(idempotency_key)
+                    return False
+                elif existing.status == "CLAIMED":
+                    # If claimed within last 60 seconds by another worker, do not duplicate
+                    if existing.created_at and (datetime.utcnow() - existing.created_at).total_seconds() < 60:
+                        return False
+                    # Stale claim (> 60s), allow reclaim
+                    existing.status = "CLAIMED"
+                    existing.created_at = datetime.utcnow()
+                    db.commit()
+                    return True
+                elif existing.status == "FAILED":
+                    # Allow safe retry for failed notifications
+                    existing.status = "CLAIMED"
+                    existing.created_at = datetime.utcnow()
+                    db.commit()
+                    return True
+
+            # If no existing record, insert claim atomically
+            claim_log = NotificationLog(
+                outlet_id=outlet_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                reference_id=reference_id,
+                channel=channel,
+                recipient=recipient,
+                event_type=event_type,
+                idempotency_key=idempotency_key,
+                status="CLAIMED",
+                environment=environment,
+            )
+            db.add(claim_log)
+            db.commit()
+            return True
+        except IntegrityError:
+            db.rollback()
+            # Another concurrent worker claimed the exact same key at the same millisecond
+            logger.info(f"Concurrent claim race detected for {idempotency_key} - duplicate suppressed.")
+            return False
+        except Exception as ex:
+            db.rollback()
+            logger.warning(f"Error during atomic notification claim: {ex}")
+            return not self.is_duplicate(idempotency_key)
+        finally:
+            db.close()
+
+    def update_claimed_notification(
+        self,
+        idempotency_key: str,
+        final_status: str,
+        error_message: Optional[str] = None,
+        outlet_id: Optional[int] = None,
+    ):
+        """Update a previously claimed atomic notification record with final delivery status."""
+        from app.database import SessionLocal
+        from app.models.notification import NotificationLog
+
+        db = SessionLocal()
+        try:
+            log_record = db.query(NotificationLog).filter(NotificationLog.idempotency_key == idempotency_key).first()
+            if log_record:
+                log_record.status = final_status
+                log_record.error_message = error_message
+                if outlet_id is not None:
+                    log_record.outlet_id = outlet_id
+                log_record.created_at = datetime.utcnow()
+                db.commit()
+                if final_status in ("SENT", "SIMULATED"):
+                    self.record_sent_key(idempotency_key)
+        except Exception as ex:
+            db.rollback()
+            logger.warning(f"Failed to update claimed NotificationLog for {idempotency_key}: {ex}")
+        finally:
+            db.close()
+
     # ==========================================
     # EMAIL DISPATCH (SENDGRID / SMTP)
     # ==========================================
@@ -556,7 +661,17 @@ class NotificationService:
         # 1. Email Notification
         if guest_email:
             email_key = f"{idempotency_key_base}_email"
-            if not self.is_duplicate(email_key):
+            if self.atomic_claim_notification(
+                idempotency_key=email_key,
+                entity_type="RESERVATION",
+                entity_id=reservation_id,
+                reference_id=reference_id,
+                channel="EMAIL",
+                recipient=guest_email,
+                event_type=f"RESERVATION_{status.upper()}",
+                environment=environment,
+                outlet_id=outlet_id,
+            ):
                 if status.upper() == "NEW":
                     subject = f"Reservation Request Received: {reference_id} – Amit Hospitality"
                     html_body = self.build_reservation_request_email(
@@ -586,48 +701,32 @@ class NotificationService:
                     email_status = "SENT" if res.get("sent") else "FAILED"
                     err_msg = res.get("error")
                 else:
-                    self.record_sent_key(email_key)
                     email_status = "SIMULATED"
                     err_msg = None
                     res = {"sent": True, "simulated": True, "message": "Email simulation logged (DEMO mode or unconfigured credentials)"}
 
                 results["email"] = res
-
-                # Log into NotificationLog table with safe retry upsert
-                db = SessionLocal()
-                try:
-                    existing_log = db.query(NotificationLog).filter(NotificationLog.idempotency_key == email_key).first()
-                    if existing_log:
-                        existing_log.status = email_status
-                        existing_log.error_message = err_msg
-                        existing_log.outlet_id = outlet_id
-                        existing_log.created_at = datetime.utcnow()
-                    else:
-                        log_entry = NotificationLog(
-                            outlet_id=outlet_id,
-                            entity_type="RESERVATION",
-                            entity_id=reservation_id,
-                            reference_id=reference_id,
-                            channel="EMAIL",
-                            recipient=guest_email,
-                            event_type=f"RESERVATION_{status.upper()}",
-                            idempotency_key=email_key,
-                            status=email_status,
-                            error_message=err_msg,
-                            environment=environment,
-                        )
-                        db.add(log_entry)
-                    db.commit()
-                except Exception as ex:
-                    db.rollback()
-                    logger.warning(f"Failed to record email NotificationLog: {ex}")
-                finally:
-                    db.close()
+                self.update_claimed_notification(
+                    idempotency_key=email_key,
+                    final_status=email_status,
+                    error_message=err_msg,
+                    outlet_id=outlet_id,
+                )
 
         # 2. SMS Notification
         if guest_phone:
             sms_key = f"{idempotency_key_base}_sms"
-            if not self.is_duplicate(sms_key):
+            if self.atomic_claim_notification(
+                idempotency_key=sms_key,
+                entity_type="RESERVATION",
+                entity_id=reservation_id,
+                reference_id=reference_id,
+                channel="SMS",
+                recipient=guest_phone,
+                event_type=f"RESERVATION_{status.upper()}",
+                environment=environment,
+                outlet_id=outlet_id,
+            ):
                 if status.upper() == "NEW":
                     sms_text = f"Amit Hospitality: Request {reference_id} for {outlet_name} on {date_str} at {time_str} received. Our Concierge is confirming table availability."
                 elif status.upper() == "ACCEPTED":
@@ -647,43 +746,17 @@ class NotificationService:
                     sms_status = "SENT" if res.get("sent") else "FAILED"
                     err_msg = res.get("error")
                 else:
-                    self.record_sent_key(sms_key)
                     sms_status = "SIMULATED"
                     err_msg = None
                     res = {"sent": True, "simulated": True, "message": "SMS simulation logged (DEMO mode or unconfigured credentials)"}
 
                 results["sms"] = res
-
-                # Log into NotificationLog table with safe retry upsert
-                db = SessionLocal()
-                try:
-                    existing_log = db.query(NotificationLog).filter(NotificationLog.idempotency_key == sms_key).first()
-                    if existing_log:
-                        existing_log.status = sms_status
-                        existing_log.error_message = err_msg
-                        existing_log.outlet_id = outlet_id
-                        existing_log.created_at = datetime.utcnow()
-                    else:
-                        log_entry = NotificationLog(
-                            outlet_id=outlet_id,
-                            entity_type="RESERVATION",
-                            entity_id=reservation_id,
-                            reference_id=reference_id,
-                            channel="SMS",
-                            recipient=guest_phone,
-                            event_type=f"RESERVATION_{status.upper()}",
-                            idempotency_key=sms_key,
-                            status=sms_status,
-                            error_message=err_msg,
-                            environment=environment,
-                        )
-                        db.add(log_entry)
-                    db.commit()
-                except Exception as ex:
-                    db.rollback()
-                    logger.warning(f"Failed to record SMS NotificationLog: {ex}")
-                finally:
-                    db.close()
+                self.update_claimed_notification(
+                    idempotency_key=sms_key,
+                    final_status=sms_status,
+                    error_message=err_msg,
+                    outlet_id=outlet_id,
+                )
 
         return results
 
@@ -708,7 +781,17 @@ class NotificationService:
 
         if guest_email:
             email_key = f"{idempotency_key_base}_email"
-            if not self.is_duplicate(email_key):
+            if self.atomic_claim_notification(
+                idempotency_key=email_key,
+                entity_type="LEAD",
+                entity_id=lead_id,
+                reference_id=reference_id,
+                channel="EMAIL",
+                recipient=guest_email,
+                event_type="LEAD_CREATED",
+                environment=environment,
+                outlet_id=outlet_id,
+            ):
                 subject = f"Inquiry Received: #{reference_id} – Amit Hospitality Events"
                 html_body = self.build_lead_acknowledgement_email(
                     lead_id=reference_id,
@@ -723,40 +806,17 @@ class NotificationService:
                     email_status = "SENT" if res.get("sent") else "FAILED"
                     err_msg = res.get("error")
                 else:
-                    self.record_sent_key(email_key)
                     email_status = "SIMULATED"
                     err_msg = None
                     res = {"sent": True, "simulated": True}
 
                 results["email"] = res
-                db = SessionLocal()
-                try:
-                    existing_log = db.query(NotificationLog).filter(NotificationLog.idempotency_key == email_key).first()
-                    if existing_log:
-                        existing_log.status = email_status
-                        existing_log.error_message = err_msg
-                        existing_log.outlet_id = outlet_id
-                        existing_log.created_at = datetime.utcnow()
-                    else:
-                        log_entry = NotificationLog(
-                            outlet_id=outlet_id,
-                            entity_type="LEAD",
-                            entity_id=lead_id,
-                            reference_id=reference_id,
-                            channel="EMAIL",
-                            recipient=guest_email,
-                            event_type="LEAD_CREATED",
-                            idempotency_key=email_key,
-                            status=email_status,
-                            error_message=err_msg,
-                            environment=environment,
-                        )
-                        db.add(log_entry)
-                    db.commit()
-                except Exception as ex:
-                    db.rollback()
-                finally:
-                    db.close()
+                self.update_claimed_notification(
+                    idempotency_key=email_key,
+                    final_status=email_status,
+                    error_message=err_msg,
+                    outlet_id=outlet_id,
+                )
 
         return results
 

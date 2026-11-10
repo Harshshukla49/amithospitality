@@ -86,11 +86,22 @@ def create_reservation(
     initial_status = "UNDER_REVIEW" if capacity_warning else "NEW"
 
     try:
+        from app.services.guest_crm_service import guest_crm_service
+        guest_prof = guest_crm_service.resolve_or_create_guest_profile(
+            db=db,
+            full_name=req.guest_name,
+            phone=req.guest_phone,
+            email=str(req.guest_email) if req.guest_email else None,
+            outlet_id=req.outlet_id,
+            environment=active_env,
+        )
+
         new_res = ReservationRequest(
             reference_id=ref_id,
             environment=active_env,
             outlet_id=req.outlet_id,
             outlet_name=outlet.name,
+            guest_profile_id=guest_prof.id,
             guest_name=req.guest_name,
             guest_phone=req.guest_phone,
             guest_email=str(req.guest_email) if req.guest_email else None,
@@ -277,6 +288,14 @@ def update_reservation_status(
             )
 
     old_status = res.status
+
+    from app.services.reservation_lifecycle_service import reservation_lifecycle_service
+    if not reservation_lifecycle_service.is_valid_transition(old_status, status_update.status):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid reservation lifecycle transition: Cannot change status from '{old_status}' to '{status_update.status}'.",
+        )
+
     res.status = status_update.status
 
     if status_update.internal_notes:

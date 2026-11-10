@@ -19,6 +19,7 @@ export type AdminTab =
   | 'KNOWLEDGE'
   | 'OUTLETS'
   | 'RESERVATIONS'
+  | 'GUESTS'
   | 'LEADS'
   | 'ANALYTICS'
   | 'INTEGRATIONS'
@@ -36,6 +37,7 @@ const ROUTE_MAP: Record<AdminTab, string> = {
   KNOWLEDGE: '/admin/knowledge',
   OUTLETS: '/admin/outlets',
   RESERVATIONS: '/admin/reservations',
+  GUESTS: '/admin/guests',
   LEADS: '/admin/leads',
   ANALYTICS: '/admin/analytics',
   INTEGRATIONS: '/admin/integrations',
@@ -77,6 +79,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <CalendarCheck className="w-4 h-4" />,
       path: '/admin/reservations',
       badge: reservationCount,
+    },
+    {
+      id: 'GUESTS',
+      label: 'Guest CRM',
+      icon: <UsersRound className="w-4 h-4" />,
+      path: '/admin/guests',
     },
     {
       id: 'LEADS',
