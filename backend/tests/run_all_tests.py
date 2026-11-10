@@ -30,6 +30,9 @@ TEST_SUITES = [
     ("Phase 19 — Live Outlets API, Multi-Outlet RBAC & Reservation Notification System", "test_phase19_notifications_outlets.py"),
     ("Phase 20 — Unified Guest CRM & Secure Self-Service Experience", "test_phase20_guest_crm_self_service.py"),
     ("Phase 20.1 — Security, Data Integrity & Reliability Audit", "test_phase20_1_security_audit.py"),
+    ("Phase 20.2 — Database Migration Safety & Rollback Verification", "verify_migration_safety.py"),
+    ("Phase 20.2 — Multi-Process OS Notification Concurrency & Crash Recovery", "test_phase20_2_multiprocess_notifications.py"),
+    ("Phase 20.2 — End-to-End Deployment Verification Lifecycle (11 Steps)", "test_phase20_2_e2e_workflow.py"),
 ]
 
 def run_master_regression_suite():
