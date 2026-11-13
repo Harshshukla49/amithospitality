@@ -167,7 +167,7 @@ export const AppContent: React.FC = () => {
       {/* Routes Viewport */}
       <Routes>
         {/* Customer Concierge Routes */}
-        <Route path="/" element={<Navigate to="/concierge" replace />} />
+        <Route path="/" element={<Navigate to={`/concierge${location.search}`} replace />} />
         <Route
           path="/concierge"
           element={

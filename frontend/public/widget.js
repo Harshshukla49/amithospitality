@@ -25,7 +25,7 @@
   // Base URL calculation
   var scriptSrc = scriptTag ? scriptTag.src : window.location.href;
   var baseUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf('/'));
-  var conciergeUrl = baseUrl.replace('/public', '') + '/?outlet=' + encodeURIComponent(defaultOutlet) + '&embed=true';
+  var conciergeUrl = baseUrl.replace('/public', '') + '/concierge?outlet=' + encodeURIComponent(defaultOutlet) + '&embed=true';
 
   // Inject Styles
   var style = document.createElement('style');

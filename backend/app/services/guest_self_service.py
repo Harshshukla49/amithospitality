@@ -22,12 +22,14 @@ from app.utils.security import create_access_token, decode_token
 
 logger = logging.getLogger("guest_self_service")
 
-def compute_otp_hmac(reference_id: str, otp_code: str) -> str:
+def compute_otp_hmac(reference_id: str, otp_code: str, secret_key: Optional[str] = None) -> str:
     """
-    Cryptographic HMAC-SHA256 hash bound to server JWT secret and reference_id.
-    Completely prevents offline brute-forcing and cross-reservation hash replay.
+    Cryptographic HMAC-SHA256 hash bound to server OTP_HMAC_SECRET and reference_id.
+    Completely independent of JWT_SECRET_KEY.
+    Prevents offline brute-forcing and cross-reservation hash replay.
     """
-    secret = (settings.JWT_SECRET_KEY or "fallback_secret_amit_hospitality").encode("utf-8")
+    raw_secret = secret_key or getattr(settings, "OTP_HMAC_SECRET", None) or "amit_hospitality_otp_hmac_secret_2026_dev_key"
+    secret = raw_secret.encode("utf-8")
     msg = f"otp:{reference_id.strip()}:{otp_code.strip()}".encode("utf-8")
     return hmac.new(secret, msg, hashlib.sha256).hexdigest()
 
@@ -246,31 +248,45 @@ class GuestSelfService:
                 detail="Verification code has expired or has not been requested. Please request a new code.",
             )
 
-        # 2. Check attempt limits
+        # 2. Check and increment attempt limits
         verification.attempts += 1
-        if verification.attempts > verification.max_attempts:
-            verification.is_used = True
-            db.add(GuestAccessAudit(
-                reference_id=clean_ref,
-                reservation_id=verification.reservation_id,
-                action="RATE_LIMITED",
-                status="BLOCKED",
-                ip_address=ip_address,
-                user_agent=user_agent,
-                details="Max verification attempts exceeded",
-            ))
-            db.commit()
-            raise HTTPException(
-                status_code=429,
-                detail="Too many invalid verification attempts. For your security, this code has been deactivated. Please request a new code.",
-            )
 
         # 3. Verify HMAC hash using constant-time comparison
+        # Supports active secret, secret rotation grace period key, and legacy fallback
         expected_hmac = compute_otp_hmac(clean_ref, clean_otp)
-        legacy_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
+        prev_secret = getattr(settings, "OTP_HMAC_PREVIOUS_SECRET", None)
+        rotation_hmac = compute_otp_hmac(clean_ref, clean_otp, secret_key=prev_secret) if prev_secret else None
+        legacy_jwt_hmac = compute_otp_hmac(clean_ref, clean_otp, secret_key=settings.JWT_SECRET_KEY)
+        legacy_plain_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
 
-        hash_matches = secrets.compare_digest(expected_hmac, verification.token_hash) or secrets.compare_digest(legacy_hash, verification.token_hash)
+        hash_matches = (
+            secrets.compare_digest(expected_hmac, verification.token_hash)
+            or (rotation_hmac is not None and secrets.compare_digest(rotation_hmac, verification.token_hash))
+            or secrets.compare_digest(legacy_jwt_hmac, verification.token_hash)
+            or secrets.compare_digest(legacy_plain_hash, verification.token_hash)
+        )
+
         if not hash_matches:
+            # Consistent documented lockout: exactly 5 invalid attempts allowed;
+            # 5th failed attempt immediately deactivates the verification code.
+            if verification.attempts >= verification.max_attempts:
+                verification.is_used = True
+                db.add(GuestAccessAudit(
+                    reference_id=clean_ref,
+                    reservation_id=verification.reservation_id,
+                    action="RATE_LIMITED",
+                    status="BLOCKED",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    details=f"Max verification attempts exceeded ({verification.attempts}/{verification.max_attempts}) - Code deactivated",
+                ))
+                db.commit()
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many invalid verification attempts. For your security, this code has been deactivated. Please request a new code.",
+                )
+
+            # Attempts remaining (1 to 4)
             db.add(GuestAccessAudit(
                 reference_id=clean_ref,
                 reservation_id=verification.reservation_id,

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Dedicated OTP HMAC Secret (Cryptographically independent from JWT_SECRET_KEY)
+    OTP_HMAC_SECRET: str = "amit_hospitality_otp_hmac_secret_2026_dev_key"
+    OTP_HMAC_PREVIOUS_SECRET: Optional[str] = None  # Key rotation grace period support
+
     # Initial Administrator
     INITIAL_ADMIN_EMAIL: str = "admin@amithospitality.com"
     INITIAL_ADMIN_PASSWORD: str = "AmitConcierge2026!Secure"
@@ -84,23 +88,30 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
         """
-        Enforce strict production safeguards:
+        Enforce strict production & staging safeguards:
         - Rejects default JWT secrets.
+        - Rejects default OTP HMAC secrets and enforces cryptographic separation from JWT.
         - Rejects default admin passwords.
-        - Rejects SQLite in production mode.
-        - Enforces DEBUG=False in production mode.
+        - Rejects SQLite in production/staging mode.
+        - Enforces DEBUG=False in production/staging mode.
         """
-        if self.APP_ENV == "production":
+        if self.APP_ENV in ("production", "staging"):
             if self.JWT_SECRET_KEY == "amit_hospitality_super_secure_jwt_secret_key_2026_change_in_production":
                 raise ValueError("Production security violation: JWT_SECRET_KEY cannot use default development placeholder.")
             if len(self.JWT_SECRET_KEY) < 32:
                 raise ValueError("Production security violation: JWT_SECRET_KEY must be at least 32 characters long.")
+            if self.OTP_HMAC_SECRET == "amit_hospitality_otp_hmac_secret_2026_dev_key" or not self.OTP_HMAC_SECRET:
+                raise ValueError("Production security violation: OTP_HMAC_SECRET must be explicitly configured with a strong secret.")
+            if len(self.OTP_HMAC_SECRET) < 32:
+                raise ValueError("Production security violation: OTP_HMAC_SECRET must be at least 32 characters long.")
+            if self.OTP_HMAC_SECRET == self.JWT_SECRET_KEY:
+                raise ValueError("Production security violation: OTP_HMAC_SECRET must be cryptographically distinct from JWT_SECRET_KEY.")
             if self.INITIAL_ADMIN_PASSWORD == "AmitConcierge2026!Secure":
                 raise ValueError("Production security violation: INITIAL_ADMIN_PASSWORD cannot use default development placeholder.")
             if self.clean_database_url.startswith("sqlite"):
-                raise ValueError("Production database violation: SQLite is prohibited in production. A PostgreSQL + pgvector DATABASE_URL is required.")
+                raise ValueError("Production database violation: SQLite is prohibited in production/staging. A PostgreSQL + pgvector DATABASE_URL is required.")
             if self.DEBUG:
-                raise ValueError("Production configuration violation: DEBUG must be False in production.")
+                raise ValueError("Production configuration violation: DEBUG must be False in production/staging.")
         return self
 
     class Config:

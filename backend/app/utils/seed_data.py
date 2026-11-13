@@ -427,7 +427,11 @@ def seed_database():
             )
             db.commit()
 
-        print("[OK] Database seeded successfully with initial Super Admin and DEMO environment records.")
+        # 11. Seed Lord of the Drinks (Kolkata)
+        from app.utils.seed_lotd import seed_lord_of_the_drinks
+        seed_lord_of_the_drinks(db)
+
+        print("[OK] Database seeded successfully with initial Super Admin, DEMO, and Lord of the Drinks records.")
     finally:
         db.close()
 

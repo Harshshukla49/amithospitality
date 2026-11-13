@@ -155,12 +155,30 @@ class NotificationService:
                         if age < backoff_seconds:
                             return False
 
-                    # Allow controlled retry/reclaim
-                    existing.attempts = current_attempts + 1
-                    existing.status = "CLAIMED"
-                    existing.created_at = datetime.utcnow()
+                    # Atomic conditional update using optimistic locking on (status, attempts)
+                    rows_claimed = (
+                        db.query(NotificationLog)
+                        .filter(
+                            NotificationLog.idempotency_key == idempotency_key,
+                            NotificationLog.status == existing.status,
+                            NotificationLog.attempts == current_attempts,
+                        )
+                        .update(
+                            {
+                                NotificationLog.attempts: current_attempts + 1,
+                                NotificationLog.status: "CLAIMED",
+                                NotificationLog.created_at: datetime.utcnow(),
+                            },
+                            synchronize_session=False,
+                        )
+                    )
                     db.commit()
-                    return True
+                    if rows_claimed == 1:
+                        return True
+                    else:
+                        # Another concurrent worker claimed the retry at the exact same instant
+                        logger.info(f"Concurrent retry claim race detected for {idempotency_key} - duplicate suppressed.")
+                        return False
 
             # If no existing record, insert claim atomically
             claim_log = NotificationLog(
@@ -311,6 +329,10 @@ class NotificationService:
                 {"type": "text/html", "value": html_content}
             ],
         }
+        if idempotency_key:
+            headers["X-Entity-Ref-ID"] = idempotency_key
+            body["custom_args"] = {"idempotency_key": idempotency_key}
+
         if text_content:
             body["content"].insert(0, {"type": "text/plain", "value": text_content})
 
