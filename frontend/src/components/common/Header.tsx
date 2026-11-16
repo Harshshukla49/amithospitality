@@ -23,6 +23,7 @@ import { useEnvironment } from '../../context/EnvironmentContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { UserRole } from '../../types';
+import { MegaMenuOverlay } from './MegaMenuOverlay';
 
 interface HeaderProps {
   currentView?: 'CUSTOMER' | 'ADMIN';
@@ -63,9 +64,14 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
 
   // Close mobile menu on route change
   useEffect(() => {
-    setMobileMenuOpen(false);
+    const params = new URLSearchParams(location.search);
+    if (params.get('menu') === 'open') {
+      setMobileMenuOpen(true);
+    } else {
+      setMobileMenuOpen(false);
+    }
     setBrandsDropdownOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const roles: { role: UserRole; label: string }[] = [
     { role: 'SUPER_ADMIN', label: 'Super Admin (Full Access)' },
@@ -110,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
     },
     {
       name: 'The Warehouse Cafe',
-      sub: 'Urban Industrial Cafe & Sunday Brunch',
+      sub: 'Urban Industrial Restobar & Cafe',
       path: '/brands/warehouse',
       location: '4th Floor, South City Mall',
       icon: Coffee,
@@ -372,79 +378,23 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
             </Link>
           )}
 
-          {/* Mobile Menu Toggle Button */}
+          {/* Luxury Mega Menu Toggle Button */}
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="xl:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-charcoal-800 transition"
-            aria-label="Toggle navigation menu"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-charcoal-900 border border-slate-700/80 text-slate-200 hover:border-gold-400/60 hover:text-gold-300 text-xs font-medium transition active:scale-95 shadow-sm"
+            aria-label="Open luxury navigation menu"
           >
-            {mobileMenuOpen ? <CloseIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
+            <MenuIcon className="w-4 h-4 text-gold-400" />
+            <span className="hidden sm:inline font-mono uppercase tracking-wider text-[11px]">Menu</span>
           </button>
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer */}
-      {mobileMenuOpen && (
-        <div className="xl:hidden bg-charcoal-950/98 border-b border-slate-800 px-4 pt-3 pb-6 space-y-4 animate-fade-in">
-          {/* Brand Links Grid */}
-          <div className="bg-charcoal-900 rounded-2xl p-3 border border-slate-800">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-gold-400 font-semibold mb-2 px-1">
-              Our Brands
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {brandsList.map((brand) => (
-                <Link
-                  key={brand.name}
-                  to={brand.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 p-2 rounded-xl bg-charcoal-950 border border-slate-800 hover:border-gold-400/50 transition"
-                >
-                  <brand.icon className={`w-4 h-4 ${brand.color} shrink-0`} />
-                  <span className="text-xs font-semibold text-white truncate">{brand.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Nav List */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                to={link.path}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`px-3 py-2 rounded-xl border transition ${
-                  isCurrentActive(link.path)
-                    ? 'bg-charcoal-800 text-gold-300 border-gold-400/40 font-semibold'
-                    : 'bg-charcoal-900/50 text-slate-300 border-slate-800 hover:text-white'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-            <Link
-              to="/guest/reservations"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex-1 text-center py-2 rounded-xl bg-charcoal-800 text-slate-200 text-xs font-medium border border-slate-700"
-            >
-              My Booking
-            </Link>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                openSwitchModal(isDemo ? 'REAL' : 'DEMO');
-              }}
-              className="flex-1 py-2 rounded-xl bg-charcoal-800 text-gold-300 text-xs font-mono border border-gold-400/30"
-            >
-              Mode: {environment}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Luxury Full-Screen Mega Menu Overlay */}
+      <MegaMenuOverlay
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
     </header>
   );
 };
