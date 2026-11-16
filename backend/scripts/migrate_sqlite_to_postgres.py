@@ -48,12 +48,17 @@ TABLE_MIGRATION_ORDER = [
     "customers",
     "conversations",
     "messages",
+    "guest_profiles",
     "reservation_requests",
     "reservation_status_history",
     "leads",
     "lead_status_history",
     "audit_logs",
     "revoked_tokens",
+    "notification_logs",
+    "guest_verifications",
+    "guest_access_audits",
+    "reservation_modification_requests",
 ]
 
 def migrate_data(sqlite_path: str, postgres_url: str, dry_run: bool = False, batch_size: int = 500) -> Dict[str, Any]:

@@ -422,6 +422,99 @@ def run_phase19_suite():
 
         print(f"    [PASS] Notification logs API verified with filtering, pagination and RBAC.")
 
+        # ----------------------------------------------------------------------
+        # 5. PHASE 19.1 RELIABILITY & SECURITY HARDENING VERIFICATION
+        # ----------------------------------------------------------------------
+        print("\n>>> 5. Testing Phase 19.1 Hardening: Outlet ID Isolation, DB Idempotency & Safe Retry...")
+
+        # 5A. Check outlet_id assignment on NotificationLog records
+        db.expire_all()
+        logged_res_entries = db.query(NotificationLog).filter(NotificationLog.entity_id == res_obj.id).all()
+        assert len(logged_res_entries) > 0
+        for entry in logged_res_entries:
+            assert entry.outlet_id == 1, f"Expected outlet_id 1, got {entry.outlet_id}"
+        print(f"    [PASS] NotificationLog records correctly carry outlet_id={logged_res_entries[0].outlet_id}.")
+
+        # 5B. Manager Tenant Isolation on Notification Logs
+        mgr1_logs = list_notification_logs(limit=50, entity_type=None, current_user=manager1, db=db)
+        mgr2_logs = list_notification_logs(limit=50, entity_type=None, current_user=manager2, db=db)
+
+        assert len(mgr1_logs) > 0, "Manager 1 (assigned to Outlet 1) must see Outlet 1 notifications"
+        assert all(l["outlet_id"] == 1 for l in mgr1_logs), "Manager 1 must only see Outlet 1 logs"
+        assert len(mgr2_logs) == 0, f"Manager 2 (assigned to Outlet 2) must see 0 Outlet 1 notifications, got {len(mgr2_logs)}"
+        print("    [PASS] Strict multi-tenant isolation confirmed: Manager 2 cannot view Manager 1's notification logs.")
+
+        # 5C. Persistent Database Idempotency (Memory Cache Eviction / Server Restart)
+        sample_key = logged_res_entries[0].idempotency_key
+        # Wipe in-memory deduplication cache completely
+        notification_service._sent_idempotency_keys.clear()
+        assert sample_key not in notification_service._sent_idempotency_keys
+
+        # is_duplicate should now hit the persistent database and return True
+        is_dup = notification_service.is_duplicate(sample_key)
+        assert is_dup is True, "Database-backed idempotency must identify duplicate key across worker/restart"
+        print("    [PASS] Cross-worker persistent DB-backed idempotency successfully identified existing key.")
+
+        # 5D. Safe Retry Upsert on Failed Notification
+        retry_key = f"res_{res_obj.reference_id}_FAILEDTEST_email"
+        failed_log = NotificationLog(
+            outlet_id=1,
+            entity_type="RESERVATION",
+            entity_id=res_obj.id,
+            reference_id=res_obj.reference_id,
+            channel="EMAIL",
+            recipient="retry.guest@example.com",
+            event_type="RESERVATION_FAILEDTEST",
+            idempotency_key=retry_key,
+            status="FAILED",
+            error_message="Simulated temporary SMTP timeout",
+            environment="DEMO",
+        )
+        db.add(failed_log)
+        db.commit()
+
+        # Retry notification dispatch for this failed key
+        retry_result = notification_service.notify_reservation_lifecycle(
+            reservation_id=res_obj.id,
+            reference_id=res_obj.reference_id,
+            guest_name=res_obj.guest_name,
+            guest_email="retry.guest@example.com",
+            guest_phone=None,
+            outlet_name=res_obj.outlet_name,
+            date_str=res_obj.reservation_date,
+            time_str=res_obj.reservation_time,
+            guest_count=res_obj.guest_count,
+            status="FAILEDTEST",
+            environment="DEMO",
+            outlet_id=1,
+        )
+
+        db.expire_all()
+        retried_logs = db.query(NotificationLog).filter(NotificationLog.idempotency_key == retry_key).all()
+        assert len(retried_logs) == 1, "Safe retry upsert must update existing log without duplicating or crashing"
+        assert retried_logs[0].status == "SIMULATED", f"Expected retried status SIMULATED, got {retried_logs[0].status}"
+        assert retried_logs[0].error_message is None
+        print("    [PASS] Safe retry upsert successfully updated failed notification record without DB crash.")
+
+        # 5E. DEMO Environment Live Messaging Guard
+        demo_notif = notification_service.notify_reservation_lifecycle(
+            reservation_id=res_obj.id,
+            reference_id="DEMOGUARD123",
+            guest_name="Demo Guard Test",
+            guest_email="guard@example.com",
+            guest_phone="+919999999999",
+            outlet_name=res_obj.outlet_name,
+            date_str="2026-12-31",
+            time_str="21:00",
+            guest_count=2,
+            status="NEW",
+            environment="DEMO",
+            outlet_id=1,
+        )
+        assert demo_notif["email"]["simulated"] is True
+        assert demo_notif["sms"]["simulated"] is True
+        print("    [PASS] DEMO environment guard strictly forces simulated notifications.")
+
         print("\n" + "=" * 80)
         print("   ALL PHASE 19 BACKEND TESTS PASSED SUCCESSFULLY! (100%)")
         print("=" * 80)

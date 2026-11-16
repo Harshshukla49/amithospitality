@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.main import healthcheck, readiness_probe, liveness_probe
 from app.config import settings, Settings
 from app.database import Base, check_database_health
+import app.models  # load all models into Base.metadata
 from app.models.user import User
 from app.models.outlet import Restaurant, Outlet, MenuItem
 from app.models.reservation import ReservationRequest
@@ -237,7 +238,8 @@ def test_phase12_cloud_deployment_and_smoke():
     # 5. Core Operational Workflow Smoke Tests
     # --------------------------------------------------------------------------
     print("\n>>> 5. Verifying Core Operational Workflow Smoke Tests...")
-    from app.database import SessionLocal
+    from app.database import SessionLocal, engine
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
     try:

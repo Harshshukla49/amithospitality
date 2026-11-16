@@ -109,6 +109,7 @@ def create_lead(
         "outlet_name": outlet.name,
         "enquiry_type": new_lead.enquiry_type,
         "environment": active_env,
+        "outlet_id": outlet.id,
     }
     if background_tasks:
         background_tasks.add_task(notification_service.notify_lead_lifecycle, **lead_notification_payload)

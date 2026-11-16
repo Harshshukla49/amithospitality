@@ -21,6 +21,8 @@ from app.routers import (
     whatsapp,
     voice,
     notifications,
+    guest,
+    crm,
 )
 
 # Initialize production error telemetry
@@ -63,6 +65,8 @@ app.include_router(integrations.router)
 app.include_router(whatsapp.router, prefix="/api/v1")
 app.include_router(voice.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
+app.include_router(guest.router)
+app.include_router(crm.router)
 
 @app.get("/")
 def root():

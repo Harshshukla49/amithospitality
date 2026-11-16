@@ -20,7 +20,11 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 def get_database_url() -> str:
-    db_url = config.get_main_option("sqlalchemy.url") or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    cfg_url = config.get_main_option("sqlalchemy.url")
+    if cfg_url and not cfg_url.startswith("driver://"):
+        db_url = cfg_url
+    else:
+        db_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif db_url.startswith("postgresql://") and "+psycopg2" not in db_url:

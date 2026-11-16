@@ -18,6 +18,8 @@ import { LeadsPage } from './pages/admin/LeadsPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
+import { GuestCrmPage } from './pages/admin/GuestCrmPage';
+import { GuestSelfServicePage } from './pages/customer/GuestSelfServicePage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { NotFoundPage } from './pages/common/NotFoundPage';
 import { UnauthorizedPage } from './pages/common/UnauthorizedPage';
@@ -178,6 +180,14 @@ export const AppContent: React.FC = () => {
             </main>
           }
         />
+        <Route
+          path="/guest/reservations"
+          element={
+            <main className="flex-1">
+              <GuestSelfServicePage />
+            </main>
+          }
+        />
 
         {/* Auth Route */}
         <Route path="/login" element={<LoginPage />} />
@@ -223,6 +233,16 @@ export const AppContent: React.FC = () => {
             <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}>
               <AdminLayoutWrapper reservations={reservations} leads={leads}>
                 <OutletsPage />
+              </AdminLayoutWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/guests"
+          element={
+            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+              <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                <GuestCrmPage />
               </AdminLayoutWrapper>
             </ProtectedRoute>
           }

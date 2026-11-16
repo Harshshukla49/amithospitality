@@ -6,6 +6,7 @@ class NotificationLog(Base):
     __tablename__ = "notification_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    outlet_id = Column(Integer, nullable=True, index=True)
     entity_type = Column(String(50), nullable=False)  # RESERVATION, LEAD
     entity_id = Column(Integer, nullable=False, index=True)
     reference_id = Column(String(100), nullable=True, index=True)

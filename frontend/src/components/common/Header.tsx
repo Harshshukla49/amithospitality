@@ -9,6 +9,7 @@ import {
   Globe,
   MessageSquare,
   LayoutDashboard,
+  Calendar,
   Check,
   LogOut,
 } from 'lucide-react';
@@ -80,12 +81,12 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
           </div>
         </Link>
 
-        {/* View Switcher: Customer Concierge vs Admin Console */}
+        {/* View Switcher: Customer Concierge vs Admin Console vs My Reservation */}
         <div className="hidden sm:flex items-center p-1 rounded-xl bg-charcoal-900 border border-slate-700/80">
           <button
             onClick={() => handleNavigateView('CUSTOMER')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
-              activeView === 'CUSTOMER'
+              activeView === 'CUSTOMER' && location.pathname !== '/guest/reservations'
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 text-obsidian-950 font-semibold shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
@@ -93,6 +94,17 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Customer Concierge</span>
           </button>
+          <Link
+            to="/guest/reservations"
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${
+              location.pathname === '/guest/reservations'
+                ? 'bg-gradient-to-r from-gold-500 to-gold-600 text-obsidian-950 font-semibold shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>My Reservation</span>
+          </Link>
           <button
             onClick={() => handleNavigateView('ADMIN')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition ${

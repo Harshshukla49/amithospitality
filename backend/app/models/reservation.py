@@ -31,10 +31,12 @@ class ReservationRequest(Base):
     assigned_staff_name = Column(String(255), nullable=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
     session_id = Column(String(255), nullable=True, index=True)
+    guest_profile_id = Column(Integer, ForeignKey("guest_profiles.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     status_history = relationship("ReservationStatusHistory", back_populates="reservation", cascade="all, delete-orphan", order_by="desc(ReservationStatusHistory.created_at)")
+    guest_profile = relationship("GuestProfile", back_populates="reservations")
 
 class ReservationStatusHistory(Base):
     __tablename__ = "reservation_status_history"
