@@ -10,10 +10,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Production Build
+# Production Build & Caches
 dist/
 build/
+.vite/
 
 # Environment and Secrets
 .env

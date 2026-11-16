@@ -4,12 +4,33 @@ import { EnvironmentProvider, useEnvironment } from './context/EnvironmentContex
 import { AuthProvider } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 import { Header } from './components/common/Header';
+import { Footer } from './components/common/Footer';
+import { FloatingConciergeLauncher } from './components/common/FloatingConciergeLauncher';
 import { DemoBanner } from './components/common/DemoBanner';
 import { SwitchEnvironmentModal } from './components/common/SwitchEnvironmentModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Sidebar } from './components/admin/Sidebar';
+
+// Public Brand & Hospitality Pages
+import { HomePage } from './pages/public/HomePage';
+import { AboutPage } from './pages/public/AboutPage';
+import { LordOfDrinksPage } from './pages/public/LordOfDrinksPage';
+import { VenetoPage } from './pages/public/VenetoPage';
+import { WarehouseCafePage } from './pages/public/WarehouseCafePage';
+import { DeliitePage } from './pages/public/DeliitePage';
+import { MenusPage } from './pages/public/MenusPage';
+import { EventsPage } from './pages/public/EventsPage';
+import { MediaPage } from './pages/public/MediaPage';
+import { CareerPage } from './pages/public/CareerPage';
+import { EnquiryPage } from './pages/public/EnquiryPage';
+import { ContactPage } from './pages/public/ContactPage';
+
+// Customer AI & Self-Service
 import { ConciergePage } from './pages/customer/ConciergePage';
+import { GuestSelfServicePage } from './pages/customer/GuestSelfServicePage';
+
+// Admin Portal Pages
 import { DashboardPage } from './pages/admin/DashboardPage';
 import { KnowledgePage } from './pages/admin/KnowledgePage';
 import { OutletsPage } from './pages/admin/OutletsPage';
@@ -19,10 +40,12 @@ import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { GuestCrmPage } from './pages/admin/GuestCrmPage';
-import { GuestSelfServicePage } from './pages/customer/GuestSelfServicePage';
+
+// Auth & Common
 import { LoginPage } from './pages/auth/LoginPage';
 import { NotFoundPage } from './pages/common/NotFoundPage';
 import { UnauthorizedPage } from './pages/common/UnauthorizedPage';
+
 import {
   INITIAL_RESERVATIONS,
   INITIAL_LEADS,
@@ -47,7 +70,7 @@ const AdminLayoutWrapper: React.FC<AdminLayoutWrapperProps> = ({ reservations, l
         }
         leadCount={leads.filter((l) => l.status === 'NEW').length}
       />
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:px-8">
         <div className="max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
@@ -155,6 +178,7 @@ export const AppContent: React.FC = () => {
 
   const isLoginPage = location.pathname === '/login';
   const isUnauthorizedPage = location.pathname === '/unauthorized';
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   return (
     <div className="min-h-screen flex flex-col bg-obsidian-950 text-slate-100 font-sans">
@@ -165,149 +189,196 @@ export const AppContent: React.FC = () => {
       {!isEmbedded && !isLoginPage && !isUnauthorizedPage && <Header />}
 
       {/* Routes Viewport */}
-      <Routes>
-        {/* Customer Concierge Routes */}
-        <Route path="/" element={<Navigate to="/concierge" replace />} />
-        <Route
-          path="/concierge"
-          element={
-            <main className="flex-1">
-              <ConciergePage
-                onReservationCreated={handleAddReservation}
-                onLeadCreated={handleAddLead}
-                isEmbedded={isEmbedded}
-              />
-            </main>
-          }
-        />
-        <Route
-          path="/guest/reservations"
-          element={
-            <main className="flex-1">
-              <GuestSelfServicePage />
-            </main>
-          }
-        />
+      <div className="flex-1 flex flex-col">
+        <Routes>
+          {/* 1. PUBLIC WEBSITE PAGES */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/knowus.php" element={<Navigate to="/about" replace />} />
 
-        {/* Auth Route */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          {/* Brand Pages */}
+          <Route path="/brands/lord-of-drinks" element={<LordOfDrinksPage />} />
+          <Route path="/lord-of-drinks" element={<Navigate to="/brands/lord-of-drinks" replace />} />
+          <Route path="/lordofrings.php" element={<LordOfDrinksPage />} />
 
-        {/* Protected Enterprise Admin Routes */}
-        <Route
-          path="/admin"
-          element={<Navigate to="/admin/dashboard" replace />}
-        />
-        <Route
-          path="/admin/dashboard"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <DashboardPage
-                  reservations={reservations}
-                  leads={leads}
-                  documents={documents}
-                  onNavigate={() => {}}
-                />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/knowledge"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <KnowledgePage
-                  documents={documents}
-                  onAddDocument={handleAddDocument}
-                  onDeleteDocument={handleDeleteDocument}
-                />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/outlets"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <OutletsPage />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/guests"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <GuestCrmPage />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/reservations"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <ReservationsPage
-                  reservations={reservations}
-                  onUpdateStatus={handleUpdateReservationStatus}
-                />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/leads"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <LeadsPage
-                  leads={leads}
-                  onUpdateStatus={handleUpdateLeadStatus}
-                  onAddLead={handleAddLead}
-                />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/analytics"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <AnalyticsPage />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/integrations"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <IntegrationsPage />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/settings"
-          element={
-            <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
-              <AdminLayoutWrapper reservations={reservations} leads={leads}>
-                <SettingsPage />
-              </AdminLayoutWrapper>
-            </ProtectedRoute>
-          }
-        />
+          <Route path="/brands/veneto" element={<VenetoPage />} />
+          <Route path="/veneto" element={<Navigate to="/brands/veneto" replace />} />
+          <Route path="/veneto.php" element={<VenetoPage />} />
 
-        {/* 404 Catch-All */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+          <Route path="/brands/warehouse" element={<WarehouseCafePage />} />
+          <Route path="/warehouse" element={<Navigate to="/brands/warehouse" replace />} />
+          <Route path="/warehouse.php" element={<WarehouseCafePage />} />
+
+          <Route path="/brands/deliite" element={<DeliitePage />} />
+          <Route path="/deliite" element={<Navigate to="/brands/deliite" replace />} />
+          <Route path="/deliite.php" element={<DeliitePage />} />
+
+          {/* Menus, Events, Media, Career, Enquiry, Contact */}
+          <Route path="/menus" element={<MenusPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/events.php" element={<EventsPage />} />
+          <Route path="/upcomingevents.php" element={<EventsPage />} />
+
+          <Route path="/media" element={<MediaPage />} />
+          <Route path="/media.php" element={<MediaPage />} />
+
+          <Route path="/career" element={<CareerPage />} />
+          <Route path="/career.php" element={<CareerPage />} />
+
+          <Route path="/enquiry" element={<EnquiryPage />} />
+          <Route path="/enquiry.php" element={<EnquiryPage />} />
+
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/contact.php" element={<ContactPage />} />
+
+          {/* 2. CUSTOMER AI CONCIERGE & SELF-SERVICE */}
+          <Route
+            path="/concierge"
+            element={
+              <main className="flex-1">
+                <ConciergePage
+                  onReservationCreated={handleAddReservation}
+                  onLeadCreated={handleAddLead}
+                  isEmbedded={isEmbedded}
+                />
+              </main>
+            }
+          />
+          <Route
+            path="/guest/reservations"
+            element={
+              <main className="flex-1">
+                <GuestSelfServicePage />
+              </main>
+            }
+          />
+
+          {/* 3. AUTH ROUTES */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+          {/* 4. PROTECTED ENTERPRISE ADMIN ROUTES */}
+          <Route
+            path="/admin"
+            element={<Navigate to="/admin/dashboard" replace />}
+          />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <DashboardPage
+                    reservations={reservations}
+                    leads={leads}
+                    documents={documents}
+                    onNavigate={() => {}}
+                  />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/knowledge"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <KnowledgePage
+                    documents={documents}
+                    onAddDocument={handleAddDocument}
+                    onDeleteDocument={handleDeleteDocument}
+                  />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/outlets"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <OutletsPage />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/guests"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <GuestCrmPage />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/reservations"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <ReservationsPage
+                    reservations={reservations}
+                    onUpdateStatus={handleUpdateReservationStatus}
+                  />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/leads"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <LeadsPage
+                    leads={leads}
+                    onUpdateStatus={handleUpdateLeadStatus}
+                    onAddLead={handleAddLead}
+                  />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <AnalyticsPage />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/integrations"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <IntegrationsPage />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+                <AdminLayoutWrapper reservations={reservations} leads={leads}>
+                  <SettingsPage />
+                </AdminLayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 404 Catch-All */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
+
+      {/* Global Luxury Footer on Public Pages */}
+      {!isEmbedded && !isAdminRoute && !isLoginPage && !isUnauthorizedPage && <Footer />}
+
+      {/* Floating AI Concierge Launcher on Public Pages */}
+      {!isEmbedded && <FloatingConciergeLauncher />}
 
       {/* Confirmation Modal for Environment Switching */}
       <SwitchEnvironmentModal />

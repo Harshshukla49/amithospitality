@@ -24,7 +24,7 @@ const mockGuests = [
     staff_notes: 'Prefers quiet booth table',
     vip_status: true,
     total_visits: 5,
-    preferred_outlet_name: 'Amber Terrace Rooftop',
+    preferred_outlet_name: 'Lord of the Drinks',
   },
   {
     id: 2,
@@ -38,7 +38,7 @@ const mockGuests = [
     allergies: '',
     vip_status: false,
     total_visits: 2,
-    preferred_outlet_name: 'Saffron & Silk',
+    preferred_outlet_name: 'Veneto Kitchen and Bar',
   },
 ];
 
@@ -101,8 +101,8 @@ describe('Admin Unified Guest CRM Directory & Management', () => {
         {
           id: 101,
           reference_id: 'REF-RES-20261110-XYZ123',
-          outlet_name: 'Amber Terrace Rooftop',
-          outlet_id: 1,
+          outlet_name: 'Lord of the Drinks',
+          outlet_id: 8,
           reservation_date: '2026-12-15',
           reservation_time: '20:00',
           guest_count: 4,

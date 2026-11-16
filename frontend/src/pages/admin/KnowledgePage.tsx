@@ -561,7 +561,7 @@ export const KnowledgePage: React.FC<KnowledgePageProps> = () => {
               value={sandboxQuery}
               onChange={(e) => setSandboxQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleRunSearch()}
-              placeholder="Enter customer question or query (e.g. 'What is the dress code for Amber Terrace?')..."
+              placeholder="Enter customer question or query (e.g. 'What is the dress code for Lord of the Drinks Kolkata?')..."
               className="flex-1 px-3.5 py-2.5 text-xs rounded-xl bg-charcoal-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-gold-400"
             />
             <select
@@ -914,7 +914,7 @@ export const KnowledgePage: React.FC<KnowledgePageProps> = () => {
                   required
                   value={manualTitle}
                   onChange={(e) => setManualTitle(e.target.value)}
-                  placeholder="e.g. Amber Terrace Friday Live Jazz & Cover Charges"
+                  placeholder="e.g. LOTD Kolkata Friday Live Band & Guest Guidelines"
                   className="w-full px-3 py-2 rounded-lg bg-charcoal-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-gold-400"
                 />
               </div>

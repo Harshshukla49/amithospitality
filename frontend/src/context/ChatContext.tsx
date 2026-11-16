@@ -35,7 +35,25 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { environment, isDemo } = useEnvironment();
-  const [selectedOutlet, setSelectedOutlet] = useState<Outlet>(INITIAL_OUTLETS[0]);
+  // Determine initial outlet from URL parameter (?outlet=lord-of-the-drinks) or default
+  const resolveInitialOutlet = (): Outlet => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const outletParam = params.get('outlet');
+      if (outletParam) {
+        const found = INITIAL_OUTLETS.find(
+          (o) =>
+            o.slug.toLowerCase() === outletParam.toLowerCase() ||
+            o.id.toString() === outletParam ||
+            o.name.toLowerCase().includes(outletParam.toLowerCase())
+        );
+        if (found) return found;
+      }
+    }
+    return INITIAL_OUTLETS[0];
+  };
+
+  const [selectedOutlet, setSelectedOutlet] = useState<Outlet>(resolveInitialOutlet);
   const [language, setLanguage] = useState<'EN' | 'HI'>('EN');
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [handoverRequested, setHandoverRequested] = useState<boolean>(false);
@@ -66,7 +84,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ],
   });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([getGreeting(INITIAL_OUTLETS[0])]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [getGreeting(resolveInitialOutlet())]);
 
   // Handle switching outlet: update welcome context
   const handleOutletChange = (newOutlet: Outlet) => {

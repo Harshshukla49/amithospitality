@@ -194,15 +194,16 @@ def review_modification_request(
         mod.reviewed_by_user_id = user_id
         mod.reviewed_by_name = user_name
 
-        # Revert status to ACCEPTED
+        # Revert status to original pre-modification status
+        revert_status = mod.old_status if mod.old_status in ("CONFIRMED", "ACCEPTED", "NEW") else "ACCEPTED"
         reservation_lifecycle_service.transition_status(
             db=db,
             reservation_id=res.id,
-            target_status="ACCEPTED",
+            target_status=revert_status,
             actor_name=user_name,
             actor_role=user_role,
             user_id=user_id,
-            notes=f"Manager rejected modification request #{mod.id}: {req.review_notes or 'None'}",
+            notes=f"Manager rejected modification request #{mod.id} (reverted to {revert_status}): {req.review_notes or 'None'}",
             notify=True,
         )
 

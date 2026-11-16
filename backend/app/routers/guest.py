@@ -25,12 +25,16 @@ def get_client_ip(request: Request) -> str:
 def verify_guest_session_token(
     reference_id: str,
     authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Validate that caller has a valid, unexpired short-lived guest access token
     specifically scoped to this reservation reference ID.
-    Prevents cross-guest enumeration and unauthorized modifications.
+    Prevents cross-guest enumeration, scope tampering, and unauthorized modifications.
     """
+    from app.models.token import RevokedToken
+    from app.database import SessionLocal
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -42,8 +46,28 @@ def verify_guest_session_token(
 
     token_type = payload.get("type")
     token_ref = payload.get("ref")
+    token_scope = payload.get("scope")
+    jti = payload.get("jti")
 
-    if token_type != "guest_access" or token_ref != reference_id:
+    # Handle direct function invocation in automated tests where db is Depends(get_db)
+    session = db if isinstance(db, Session) else SessionLocal()
+    should_close = not isinstance(db, Session)
+
+    try:
+        if jti:
+            revoked = session.query(RevokedToken).filter(RevokedToken.jti == jti).first()
+            if revoked:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Guest verification session has been terminated or revoked.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    finally:
+        if should_close:
+            session.close()
+
+    expected_scope = f"guest:reservation:{reference_id}"
+    if token_type != "guest_access" or token_ref != reference_id or token_scope != expected_scope:
         raise HTTPException(
             status_code=403,
             detail="Access forbidden: This verification session does not permit access to this booking.",

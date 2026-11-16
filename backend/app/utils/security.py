@@ -105,6 +105,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     from app.models.token import RevokedToken
 
     payload = decode_token(token)
+    if payload.get("type") == "guest_access":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Guest session tokens cannot access internal staff or administrative endpoints",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     email: str = payload.get("sub")
     jti: Optional[str] = payload.get("jti")
 

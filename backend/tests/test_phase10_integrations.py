@@ -159,10 +159,10 @@ def test_phase10_integrations():
 
     reserve_xml = v_service.build_interaction_twiml("I want to book a dinner table tonight")
     assert "dining reservation" in reserve_xml
-    assert "Amber Terrace" in reserve_xml
+    assert "Lord of the Drinks" in reserve_xml
 
     policy_xml = v_service.build_interaction_twiml("What is the dress code and valet timing?")
-    assert "Amber Terrace" in policy_xml
+    assert "Lord of the Drinks" in policy_xml
     assert "valet parking" in policy_xml
     print("  [OK] Conversational voice speech intent recognition & routing verified.")
 

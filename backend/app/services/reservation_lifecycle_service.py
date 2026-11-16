@@ -14,9 +14,9 @@ logger = logging.getLogger("reservation_lifecycle_service")
 # Enforces non-arbitrary transitions and protects terminal states
 ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
     "NEW": ["ACCEPTED", "CONFIRMED", "UNDER_REVIEW", "REJECTED", "CANCELLED", "MODIFIED"],
-    "UNDER_REVIEW": ["ACCEPTED", "CONFIRMED", "REJECTED", "CANCELLED", "MODIFIED"],
-    "ACCEPTED": ["MODIFIED", "COMPLETED", "CANCELLED", "NO_SHOW"],
-    "CONFIRMED": ["MODIFIED", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    "UNDER_REVIEW": ["NEW", "ACCEPTED", "CONFIRMED", "REJECTED", "CANCELLED", "MODIFIED"],
+    "ACCEPTED": ["MODIFIED", "COMPLETED", "CANCELLED", "NO_SHOW", "UNDER_REVIEW"],
+    "CONFIRMED": ["MODIFIED", "COMPLETED", "CANCELLED", "NO_SHOW", "UNDER_REVIEW"],
     "MODIFIED": ["ACCEPTED", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW", "UNDER_REVIEW"],
     "COMPLETED": [],     # Terminal state
     "CANCELLED": [],     # Terminal state
@@ -102,7 +102,15 @@ class ReservationLifecycleService:
         db.commit()
         db.refresh(res)
 
-        # 3. Notification dispatch
+        # 3. Recompute guest metrics if transitioning to or from COMPLETED
+        if (next_status == "COMPLETED" or old_status == "COMPLETED") and res.guest_profile_id:
+            try:
+                from app.services.guest_crm_service import guest_crm_service
+                guest_crm_service.recompute_guest_metrics(db, res.guest_profile_id)
+            except Exception as ex:
+                logger.warning(f"Notice recomputing guest metrics: {ex}")
+
+        # 4. Notification dispatch
         if notify:
             payload = {
                 "reservation_id": res.id,

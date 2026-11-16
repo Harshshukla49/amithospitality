@@ -8,29 +8,29 @@ import * as outletsApi from '../api/outlets';
 
 const mockOutlets = [
   {
-    id: 1,
-    name: 'Amber Terrace Rooftop',
-    slug: 'amber-terrace',
-    outletType: 'Rooftop Lounge',
+    id: 8,
+    name: 'Lord of the Drinks',
+    slug: 'lord-of-the-drinks',
+    outletType: 'Nightlife & Bar',
     cuisineType: 'Pan-Asian & Cocktails',
-    openingTime: '18:00',
-    closingTime: '01:00',
-    seatingCapacity: 80,
-    description: 'Skyline lounge overlooking the sea',
-    location: 'Level 12, Tower A',
+    openingTime: '12:00',
+    closingTime: '00:00',
+    seatingCapacity: 220,
+    description: 'Medieval castle lounge and tallest bar in Kolkata',
+    location: '4th Floor, South City Mall',
     isPopular: true,
   },
   {
-    id: 2,
-    name: 'Saffron & Silk',
-    slug: 'saffron-silk',
-    outletType: 'Fine Dining',
-    cuisineType: 'Awadhi & Royal Indian',
-    openingTime: '12:30',
+    id: 9,
+    name: 'Veneto Kitchen and Bar',
+    slug: 'veneto',
+    outletType: 'Fine Dining & Pizzeria',
+    cuisineType: 'Italian & Mediterranean',
+    openingTime: '12:00',
     closingTime: '23:30',
-    seatingCapacity: 60,
-    description: 'Opulent heritage dining',
-    location: 'Ground Floor, Grand Atrium',
+    seatingCapacity: 120,
+    description: 'Wood-fired culinary artistry and Mediterranean hospitality',
+    location: '4th Floor, South City Mall',
     isPopular: false,
   },
 ];
@@ -38,7 +38,7 @@ const mockOutlets = [
 const mockMenuItems = [
   {
     id: 101,
-    outletId: 1,
+    outletId: 8,
     environment: 'DEMO',
     name: 'Crispy Truffle Lotus Stem',
     description: 'Honey-chilli glaze with black truffle',
@@ -58,6 +58,10 @@ vi.mock('../api/outlets', () => ({
   updateMenuItemApi: vi.fn(),
   deleteMenuItemApi: vi.fn(),
   updateOutletApi: vi.fn(),
+}));
+
+vi.mock('../api/audit', () => ({
+  fetchAuditLogsApi: vi.fn().mockResolvedValue([]),
 }));
 
 const renderComponent = () => {
@@ -92,12 +96,12 @@ describe('OutletsPage Live Database Integration & Management', () => {
 
     // Verify loading skeleton resolves into live outlets
     await waitFor(() => {
-      expect(screen.getByText('Amber Terrace Rooftop')).toBeInTheDocument();
-      expect(screen.getByText('Saffron & Silk')).toBeInTheDocument();
+      expect(screen.getByText('Lord of the Drinks')).toBeInTheDocument();
+      expect(screen.getByText('Veneto Kitchen and Bar')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Pan-Asian & Cocktails')).toBeInTheDocument();
-    expect(screen.getByText('Awadhi & Royal Indian')).toBeInTheDocument();
+    expect(screen.getByText('Italian & Mediterranean')).toBeInTheDocument();
   });
 
   it('fetches and displays menu items for selected outlet', async () => {
@@ -153,15 +157,15 @@ describe('OutletsPage Live Database Integration & Management', () => {
       expect(screen.getByText(/Configure Operational Rules/i)).toBeInTheDocument();
     });
 
-    const capacityInput = screen.getByDisplayValue('80');
-    fireEvent.change(capacityInput, { target: { value: '100' } });
+    const capacityInput = screen.getByDisplayValue('220');
+    fireEvent.change(capacityInput, { target: { value: '250' } });
 
     const saveRulesBtn = screen.getByRole('button', { name: /Save Operational Rules/i });
     fireEvent.click(saveRulesBtn);
 
     await waitFor(() => {
-      expect(outletsApi.updateOutletApi).toHaveBeenCalledWith(1, expect.objectContaining({
-        seating_capacity: 100,
+      expect(outletsApi.updateOutletApi).toHaveBeenCalledWith(8, expect.objectContaining({
+        seating_capacity: 250,
       }));
     });
   });

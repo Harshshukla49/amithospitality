@@ -104,6 +104,7 @@ def test_phase12_cloud_deployment_and_smoke():
         Settings(
             APP_ENV="production",
             JWT_SECRET_KEY="a" * 64,
+            OTP_HMAC_SECRET="b" * 64,
             INITIAL_ADMIN_PASSWORD="Secure_Pass_2026_!",
             DATABASE_URL="sqlite:///./amit_concierge.db",
             DEBUG=False,
@@ -118,6 +119,7 @@ def test_phase12_cloud_deployment_and_smoke():
         Settings(
             APP_ENV="production",
             JWT_SECRET_KEY="a" * 64,
+            OTP_HMAC_SECRET="b" * 64,
             INITIAL_ADMIN_PASSWORD="Secure_Pass_2026_!",
             DATABASE_URL="postgresql+psycopg2://user:pass@host/db",
             DEBUG=True,
@@ -132,6 +134,7 @@ def test_phase12_cloud_deployment_and_smoke():
         Settings(
             APP_ENV="production",
             JWT_SECRET_KEY="amit_hospitality_super_secure_jwt_secret_key_2026_change_in_production",
+            OTP_HMAC_SECRET="b" * 64,
             INITIAL_ADMIN_PASSWORD="Secure_Pass_2026_!",
             DATABASE_URL="postgresql+psycopg2://user:pass@host/db",
             DEBUG=False,
@@ -140,6 +143,21 @@ def test_phase12_cloud_deployment_and_smoke():
     except ValueError as e:
         assert "JWT_SECRET_KEY cannot use default development placeholder" in str(e)
     print("  [OK] Safeguard prevents default JWT secret in production.")
+
+    # 3.4 Prohibit default OTP_HMAC_SECRET in production
+    try:
+        Settings(
+            APP_ENV="production",
+            JWT_SECRET_KEY="a" * 64,
+            OTP_HMAC_SECRET="amit_hospitality_otp_hmac_secret_2026_dev_key",
+            INITIAL_ADMIN_PASSWORD="Secure_Pass_2026_!",
+            DATABASE_URL="postgresql+psycopg2://user:pass@host/db",
+            DEBUG=False,
+        )
+        assert False, "Should fail: default OTP_HMAC_SECRET in production"
+    except ValueError as e:
+        assert "OTP_HMAC_SECRET must be explicitly configured" in str(e)
+    print("  [OK] Safeguard prevents default OTP_HMAC_SECRET in production.")
 
     # --------------------------------------------------------------------------
     # 4. Database Staging Migration Verification
