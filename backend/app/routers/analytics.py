@@ -217,20 +217,20 @@ def get_dashboard_kpis(
             UnansweredItem(
                 question="Do you allow outside birthday cakes and what is the plating fee?",
                 frequency=28,
-                outlet=outlet_name or "Amber Terrace Rooftop",
+                outlet=outlet_name or "Lord of the Drinks",
                 suggestion="Upload Cake & External Food Policy doc",
             ),
             UnansweredItem(
-                question="Are pets allowed in the outdoor garden terrace seating?",
+                question="What is the reservation requirement for the South City Mall weekend live music gigs?",
                 frequency=19,
-                outlet=outlet_name or "Saffron & Silk",
-                suggestion="Add Pet Policy FAQ",
+                outlet=outlet_name or "Veneto Kitchen and Bar",
+                suggestion="Add Weekend Event FAQ",
             ),
             UnansweredItem(
-                question="What is the corkage fee for vintage wine bottles brought by guests?",
+                question="What are the Sunday brunch timings and buffet package options?",
                 frequency=14,
-                outlet=outlet_name or "The Velvet Cellar",
-                suggestion="Index Sommelier Corkage Guidelines",
+                outlet=outlet_name or "The Warehouse Cafe",
+                suggestion="Index Sunday Brunch Menu Guidelines",
             ),
         ]
 

@@ -4,7 +4,7 @@
  * 
  * Usage:
  * <script src="https://concierge.amithospitality.com/widget.js" 
- *         data-outlet="amber-terrace" 
+ *         data-outlet="lord-of-the-drinks" 
  *         data-accent-color="#D4AF37" 
  *         data-position="bottom-right"></script>
  */
@@ -18,7 +18,7 @@
     return scripts[scripts.length - 1];
   })();
 
-  var defaultOutlet = scriptTag ? scriptTag.getAttribute('data-outlet') || 'amber-terrace' : 'amber-terrace';
+  var defaultOutlet = scriptTag ? scriptTag.getAttribute('data-outlet') || 'lord-of-the-drinks' : 'lord-of-the-drinks';
   var accentColor = scriptTag ? scriptTag.getAttribute('data-accent-color') || '#D4AF37' : '#D4AF37';
   var position = scriptTag ? scriptTag.getAttribute('data-position') || 'bottom-right' : 'bottom-right';
 

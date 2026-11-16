@@ -27,7 +27,6 @@ import { Outlet, ReservationRequest, Lead } from '../../types';
 import { ReservationModal } from '../../components/customer/ReservationModal';
 import { LeadModal } from '../../components/customer/LeadModal';
 import { MenuModal } from '../../components/customer/MenuModal';
-import { OutletCard } from '../../components/customer/OutletCard';
 
 interface ConciergePageProps {
   onReservationCreated?: (res: ReservationRequest) => void;
@@ -117,66 +116,34 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
     }
   };
 
-  const handleCardSelect = (outlet: Outlet) => {
-    setSelectedOutlet(outlet);
-    scrollToChat();
-  };
-
-  const handleCardViewMenu = (outlet: Outlet) => {
-    setMenuOutlet(outlet);
-    setIsMenuOpen(true);
-  };
-
-  const handleCardBookTable = (outlet: Outlet) => {
-    setSelectedOutlet(outlet);
-    setIsReservationOpen(true);
-  };
-
   return (
     <div
       className={
         isEmbedded
           ? 'h-full p-2 flex flex-col'
-          : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 animate-fade-in'
+          : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 animate-fade-in'
       }
     >
-      {/* SECTION 1: LUXURY SIGNATURE OUTLET CARDS GALLERY (Only in full customer view) */}
+      {/* AUTHENTIC HEADER: AMIT HOSPITALITY AI CONCIERGE */}
       {!isEmbedded && (
-        <section aria-labelledby="signature-destinations-heading" className="space-y-6">
-          {/* Header Section */}
-          <div className="text-center space-y-2.5 max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gold-500/10 border border-gold-400/30 text-gold-400 text-xs font-semibold uppercase tracking-widest shadow-sm">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Curated Five-Star Gastronomy</span>
-            </div>
-            <h1
-              id="signature-destinations-heading"
-              className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gold-200 to-gold-400 tracking-tight"
-            >
-              Discover Our Signature Dining Destinations
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
-              Explore exceptional dining experiences, thoughtfully curated for every occasion.
-            </p>
+        <section aria-labelledby="concierge-heading" className="space-y-3 text-center max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gold-500/10 border border-gold-400/30 text-gold-400 text-xs font-semibold uppercase tracking-widest shadow-sm">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Amit Hospitality LLP • Digital Concierge</span>
           </div>
-
-          {/* 3-Column Responsive Grid: Desktop 3 / Tablet 2 / Mobile 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {INITIAL_OUTLETS.map((outlet) => (
-              <OutletCard
-                key={outlet.id}
-                outlet={outlet}
-                isSelected={selectedOutlet.id === outlet.id}
-                onSelect={handleCardSelect}
-                onViewMenu={handleCardViewMenu}
-                onBookTable={handleCardBookTable}
-              />
-            ))}
-          </div>
+          <h1
+            id="concierge-heading"
+            className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gold-200 to-gold-400 tracking-tight"
+          >
+            AI Concierge Assistant
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
+            Directly converse regarding table reservations, culinary menus, private banquets, and event timings across Lord of the Drinks, Veneto Kitchen and Bar, The Warehouse Cafe, and Deliite.
+          </p>
         </section>
       )}
 
-      {/* SECTION 2: LUXURY CONVERSATIONAL AI CONCIERGE TERMINAL */}
+      {/* LUXURY CONVERSATIONAL AI CONCIERGE TERMINAL */}
       <section
         ref={chatTerminalRef}
         aria-label="AI Concierge Terminal"
@@ -246,7 +213,13 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {o.name.split(' ')[0]}
+                      {o.slug === 'lord-of-the-drinks'
+                        ? 'Lord of Drinks'
+                        : o.slug === 'the-warehouse-cafe'
+                        ? 'Warehouse Cafe'
+                        : o.slug === 'veneto'
+                        ? 'Veneto'
+                        : o.name}
                     </button>
                   );
                 })}
@@ -310,7 +283,10 @@ export const ConciergePage: React.FC<ConciergePageProps> = ({
             Fast-Track:
           </span>
           <button
-            onClick={() => handleCardViewMenu(selectedOutlet)}
+            onClick={() => {
+              setMenuOutlet(selectedOutlet);
+              setIsMenuOpen(true);
+            }}
             className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-charcoal-900 hover:bg-charcoal-800 border border-slate-700 hover:border-gold-400/40 text-slate-200 hover:text-gold-300 transition shrink-0 whitespace-nowrap text-[11px]"
           >
             <Utensils className="w-3 h-3 text-gold-400" />

@@ -93,8 +93,8 @@ describe('Guest Self-Service Portal Experience', () => {
       reservation: {
         id: 10,
         reference_id: 'REF-RES-20261110-ABC123',
-        outlet_name: 'Amber Terrace Rooftop',
-        outlet_id: 1,
+        outlet_name: 'Lord of the Drinks',
+        outlet_id: 8,
         guest_name: 'Priyanka Sen',
         guest_phone: '+919876500001',
         guest_count: 2,
@@ -133,7 +133,7 @@ describe('Guest Self-Service Portal Experience', () => {
 
     // 3. Portal details rendered
     await waitFor(() => {
-      expect(screen.getByText('Amber Terrace Rooftop')).toBeInTheDocument();
+      expect(screen.getByText('Lord of the Drinks')).toBeInTheDocument();
       expect(screen.getByText('2026-12-30')).toBeInTheDocument();
       expect(screen.getByText('20:30')).toBeInTheDocument();
       expect(screen.getByText('2 Guests')).toBeInTheDocument();

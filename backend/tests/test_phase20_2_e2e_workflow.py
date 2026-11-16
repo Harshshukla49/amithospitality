@@ -104,6 +104,9 @@ def setup_e2e_fixtures(db):
         db.add(mgr1)
         db.commit()
         db.refresh(mgr1)
+    else:
+        mgr1.outlet_id = outlet1.id
+        db.commit()
 
     # Manager for Outlet 2
     mgr2 = db.query(User).filter(User.email == "manager.saffron.e2e@amithospitality.com").first()
@@ -119,6 +122,9 @@ def setup_e2e_fixtures(db):
         db.add(mgr2)
         db.commit()
         db.refresh(mgr2)
+    else:
+        mgr2.outlet_id = outlet2.id
+        db.commit()
 
     # Staff User for Outlet 1
     staff1 = db.query(User).filter(User.email == "staff.amber.e2e@amithospitality.com").first()
@@ -132,6 +138,9 @@ def setup_e2e_fixtures(db):
             is_active=True,
         )
         db.add(staff1)
+        db.commit()
+    else:
+        staff1.outlet_id = outlet1.id
         db.commit()
         db.refresh(staff1)
 

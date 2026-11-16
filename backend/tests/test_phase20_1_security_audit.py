@@ -81,6 +81,8 @@ def seed_test_outlets_and_users(db):
             is_active=True,
         )
         db.add(s1)
+    else:
+        s1.outlet_id = o1.id
 
     # Staff for Outlet 2
     s2 = db.query(User).filter(User.email == "staff.o2@amithospitality.com").first()
@@ -94,6 +96,8 @@ def seed_test_outlets_and_users(db):
             is_active=True,
         )
         db.add(s2)
+    else:
+        s2.outlet_id = o2.id
 
     # Manager for Outlet 1
     m1 = db.query(User).filter(User.email == "mgr.o1@amithospitality.com").first()
@@ -107,6 +111,8 @@ def seed_test_outlets_and_users(db):
             is_active=True,
         )
         db.add(m1)
+    else:
+        m1.outlet_id = o1.id
 
     # Admin User
     admin = db.query(User).filter(User.email == "admin.audit@amithospitality.com").first()
@@ -576,11 +582,12 @@ def test_07_multi_tenant_cross_outlet_rbac_boundaries():
         o1, o2, s1, s2, m1, admin = seed_test_outlets_and_users(db)
 
         # Create Guest Exclusive to Outlet 2
+        uniq_phone_o2 = f"+9197{secrets.randbelow(89999999) + 10000000}"
         g2 = guest_crm_service.resolve_or_create_guest_profile(
             db=db,
             full_name="Outlet Two Guest",
-            phone="+919777777777",
-            email="o2guest@example.com",
+            phone=uniq_phone_o2,
+            email=f"o2guest_{secrets.token_hex(2)}@example.com",
             outlet_id=o2.id,
             environment="DEMO",
         )

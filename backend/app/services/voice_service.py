@@ -94,7 +94,7 @@ class TwilioVoiceService:
         if any(w in lower for w in ["reserve", "reservation", "book", "table", "dinner", "lunch"]):
             return """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Aditi" language="en-IN">I would be delighted to assist with your dining reservation at Amit Hospitality. We curate Amber Terrace Rooftop and Saffron and Silk Fine Dining. I have dispatched our reservation portal link to your phone number.</Say>
+    <Say voice="Polly.Aditi" language="en-IN">I would be delighted to assist with your dining reservation at Amit Hospitality. We curate Lord of the Drinks, Veneto Kitchen and Bar, and The Warehouse Cafe. I have dispatched our reservation portal link to your phone number.</Say>
     <Gather input="speech" action="/api/v1/voice/interact" language="en-IN" speechTimeout="auto" timeout="3">
         <Say voice="Polly.Aditi" language="en-IN">Would you like me to check table availability for this evening?</Say>
     </Gather>
@@ -105,7 +105,7 @@ class TwilioVoiceService:
         if any(w in lower for w in ["time", "hours", "open", "close", "dress code", "valet"]):
             return """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Aditi" language="en-IN">Our rooftop lounge, Amber Terrace, welcomes guests from 5 PM until 1 AM with smart evening attire. Complimentary valet parking is available at the main porch.</Say>
+    <Say voice="Polly.Aditi" language="en-IN">Lord of the Drinks at South City Mall welcomes guests daily from noon with smart casual attire. Complimentary mall valet parking is available.</Say>
     <Gather input="speech" action="/api/v1/voice/interact" language="en-IN" speechTimeout="auto" timeout="3">
         <Say voice="Polly.Aditi" language="en-IN">May I assist you with anything else today?</Say>
     </Gather>

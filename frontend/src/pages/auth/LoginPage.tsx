@@ -149,7 +149,7 @@ export const LoginPage: React.FC = () => {
                 className="p-2 rounded-lg bg-charcoal-900 hover:bg-charcoal-800 border border-slate-800 hover:border-gold-400/50 text-left text-slate-300 transition"
               >
                 <div className="font-semibold text-white">F&B Manager</div>
-                <div className="text-[10px] text-slate-500">Amber Terrace (ID: 1)</div>
+                <div className="text-[10px] text-slate-500">Lord of the Drinks (ID: 8)</div>
               </button>
             </div>
           </div>
