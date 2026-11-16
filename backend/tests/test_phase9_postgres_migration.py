@@ -92,6 +92,7 @@ def test_phase9_infrastructure_and_migration():
         Settings(
             APP_ENV="production",
             JWT_SECRET_KEY="super_secure_custom_production_key_64_characters_long_1234567890",
+            OTP_HMAC_SECRET="super_secure_custom_otp_hmac_secret_64_chars_long_1234567890",
             INITIAL_ADMIN_PASSWORD="Secure_Admin_Password_2026!",
             DATABASE_URL="sqlite:///./amit_concierge.db",
             DEBUG=False,
@@ -106,6 +107,7 @@ def test_phase9_infrastructure_and_migration():
         Settings(
             APP_ENV="production",
             JWT_SECRET_KEY="super_secure_custom_production_key_64_characters_long_1234567890",
+            OTP_HMAC_SECRET="super_secure_custom_otp_hmac_secret_64_chars_long_1234567890",
             INITIAL_ADMIN_PASSWORD="Secure_Admin_Password_2026!",
             DATABASE_URL="postgresql+psycopg2://user:pass@host/db",
             DEBUG=True,
@@ -114,6 +116,21 @@ def test_phase9_infrastructure_and_migration():
     except ValueError as e:
         assert "DEBUG must be False in production" in str(e)
         print("  [OK] Guard blocked DEBUG=True in production.")
+
+    # 3d. Rejects default OTP_HMAC_SECRET in production
+    try:
+        Settings(
+            APP_ENV="production",
+            JWT_SECRET_KEY="super_secure_custom_production_key_64_characters_long_1234567890",
+            OTP_HMAC_SECRET="amit_hospitality_otp_hmac_secret_2026_dev_key",
+            INITIAL_ADMIN_PASSWORD="Secure_Admin_Password_2026!",
+            DATABASE_URL="postgresql+psycopg2://user:pass@host/db",
+            DEBUG=False,
+        )
+        assert False, "Should fail on default OTP_HMAC_SECRET in production."
+    except ValueError as e:
+        assert "OTP_HMAC_SECRET must be explicitly configured" in str(e)
+        print("  [OK] Guard blocked default OTP_HMAC_SECRET in production.")
 
     # --------------------------------------------------------------------------
     # 4. Token Rotation & Replay-Attack Prevention Test

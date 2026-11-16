@@ -60,6 +60,10 @@ vi.mock('../api/outlets', () => ({
   updateOutletApi: vi.fn(),
 }));
 
+vi.mock('../api/audit', () => ({
+  fetchAuditLogsApi: vi.fn().mockResolvedValue([]),
+}));
+
 const renderComponent = () => {
   return render(
     <AuthProvider>

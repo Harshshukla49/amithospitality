@@ -33,6 +33,9 @@ TEST_SUITES = [
     ("Phase 20.2 — Database Migration Safety & Rollback Verification", "verify_migration_safety.py"),
     ("Phase 20.2 — Multi-Process OS Notification Concurrency & Crash Recovery", "test_phase20_2_multiprocess_notifications.py"),
     ("Phase 20.2 — End-to-End Deployment Verification Lifecycle (11 Steps)", "test_phase20_2_e2e_workflow.py"),
+    ("Phase 20.3 — Notification Failure Scenarios & Worker Resilience", "test_phase20_3_notification_resilience.py"),
+    ("Lord of the Drinks — Grounded RAG & Data Integrity", "test_lord_of_the_drinks.py"),
+    ("Lord of the Drinks — Step 3 Live End-to-End Verification", "verify_step3_live_e2e.py"),
 ]
 
 def run_master_regression_suite():
